@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from .ai_providers import PROVIDER_NAMES, get_provider
 from .content_proposals import (
     apply_approved,
     build_proposal,
@@ -18,26 +19,6 @@ from .proposal_io import (
     write_new_proposal,
 )
 from .sources import load_source
-
-
-def demo_provider(row):
-    """Deterministic provider used to verify the workflow before real AI."""
-
-    name = row.name.strip()
-
-    return {
-        "description": (
-            f"Propozycja demonstracyjna dla produktu {name}. "
-            "Treść wymaga ręcznej akceptacji przed synchronizacją."
-        ),
-        "short_description": (
-            f"Propozycja opisu produktu {name} do ręcznej weryfikacji."
-        ),
-        "image_alt": (
-            row.extra.get("image_alt")
-            or f"{name} — zdjęcie produktu"
-        ),
-    }
 
 
 def add_source_arguments(parser):
@@ -81,7 +62,7 @@ def build_parser():
     )
     propose.add_argument(
         "--provider",
-        choices=("demo",),
+        choices=PROVIDER_NAMES,
         default="demo",
     )
 
@@ -128,7 +109,7 @@ def main(argv=None):
 
             proposal = build_proposal(
                 rows,
-                demo_provider,
+                get_provider(args.provider),
                 args.source_file,
             )
 
