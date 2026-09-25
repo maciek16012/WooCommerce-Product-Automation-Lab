@@ -1,73 +1,138 @@
 # WooCommerce Product Automation Lab
 
-Lokalny projekt portfolio łączący sklep **Biurko / Lab**, deterministyczną synchronizację produktów i **propozycje treści AI wymagające review**. Nic nie jest publikowane automatycznie.
+## Overview
 
-- **Stage 1 / v1.0.0:** WordPress, WooCommerce i MariaDB w Dockerze; autorski sklep, katalog, koszyk i fikcyjny checkout. CSV → CREATE / UPDATE / SKIP, REST v3 po SKU, OAuth dla lokalnego HTTP.
-- **Stage 2 / v1.1.0:** canonical `data/catalog.json`, adaptery CSV / JSON / publiczny Google Sheets CSV, wspólna walidacja, polityka właściciela stanu i raporty RUN_SUMMARY.
-- **Stage 3 / gałąź do review:** demo, OpenAI Responses oraz rzeczywisty lokalny llama.cpp; pending → review → approved/rejected → fingerprint → walidowany CSV → zwykły WooCommerce PLAN.
+A personal engineering lab connecting a real local **WooCommerce storefront** with a validated product pipeline and reviewed AI content. **Biurko / Lab** is a fictional Polish desk-accessory shop: six products, three categories, PLN, an original theme, cart and offline checkout.
 
-## Uruchomienie sklepu
+The project demonstrates how catalog updates can preserve store-owned inventory, avoid unnecessary writes and keep generated copy behind an explicit review boundary. It is not a client project or a production deployment.
 
-```powershell
-Set-Location C:\AI\WooCommerceProductAutomationLab
-docker compose up -d
+## Key features
+
+- **CSV / JSON / public Google Sheets CSV** adapters share validation and `ProductRow` normalization.
+- **SKU matching**, CREATE / UPDATE / SKIP, changed-field-only updates and an idempotent second run.
+- **PLAN by default**, explicit `--apply`, source-owned or WooCommerce-owned stock, JSONL operation and run reports.
+- **Human-in-the-loop AI** with offline `demo`, local `llama.cpp` and optional OpenAI Responses providers; pending proposals, content-bound approval and stale-source protection.
+- **89 offline regression tests**; recorded real WooCommerce, checkout, Sheets and local-model acceptance results.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    S[CSV / JSON / public Google Sheets CSV] --> V[Whole-input validation]
+    V --> R[ProductRow]
+    R --> A{Optional AI providers}
+    A --> D[demo / OpenAI / local llama.cpp]
+    D --> P[pending proposal]
+    P --> H[Human review]
+    H --> F[Source fingerprint and exact-content approval checks]
+    F --> M[Validated CSV materialization]
+    R --> W[WooCommerce planner: SKU matching and stock ownership]
+    M --> W
+    W --> PLAN[PLAN: CREATE / UPDATE / SKIP]
+    PLAN --> E[Separate invocation with explicit --apply]
+    E --> API[WooCommerce REST API v3]
+    W --> J[JSONL operations and RUN_SUMMARY]
+    API --> J
 ```
 
-Sklep: http://localhost:8090; panel: http://localhost:8090/wp-admin/. Port WordPressa jest przypięty do `127.0.0.1`. Wolumeny przechowują dane; nie używaj `docker compose down -v`.
+The AI path produces a local file, not an API write. APPLY recomputes the plan; a previous PLAN is a preview, not a frozen transaction. See [architecture](docs/architecture.md).
 
-## Synchronizacja
+## Safety / design decisions
 
-W standardowym Pythonie 3.10+ można utworzyć `.venv` i wykonać `python -m pip install -e .`. Runtime synchronizatora i providerów korzysta wyłącznie z biblioteki standardowej.
+- Validate every input row and preflight the complete plan before writes. Errors during APPLY can still leave earlier successful writes in place: the API is not transactional.
+- Retry transient **GET** failures only; never automatically retry POST / PUT. SKIP sends no write request.
+- `--stock-authority woocommerce` protects existing inventory after checkout. The default `source` policy treats source stock as authoritative; new products always use source initial stock.
+- Local HTTP uses signed **OAuth 1.0a** on loopback. Public endpoints require HTTPS; Basic Auth is used only over verified TLS. Redirects are blocked.
+- AI can change only `description`, `short_description` and `image_alt`. Approval binds the exact text and source fingerprint. Atomic file publication avoids partial proposals/CSV files.
+- Credentials, `.env`, logs, proposals and backups stay outside Git. Reports can contain catalog content: review them before sharing.
+
+## Quick start
+
+Requirements: **Python 3.10+** with pip and venv. Docker is needed only for the local store; tests and demo proposals need no services or keys. From the repository root, in Windows PowerShell:
 
 ```powershell
-woo-sync validate data/catalog.json
+py -3 -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install -e .
+& .\.venv\Scripts\python.exe scripts/run-tests.py
+& .\.venv\Scripts\woo-sync.exe validate data/catalog.json
+```
+
+On Linux/macOS: `python3 -m venv .venv`, then `.venv/bin/python -m pip install -e .`; use `.venv/bin/python` and `.venv/bin/woo-sync` thereafter. No third-party runtime packages are required. Pillow is optional and needed only to redraw the supplied original illustrations.
+
+For a **fresh store**, follow [Windows setup](docs/WINDOWS.md): create local database secrets, start Compose, install WordPress/WooCommerce, deploy the demo and generate a local API key. A fresh clone has no database or installed plugins. Existing installations keep their volumes and `.env`.
+
+Once configured, activate the venv (or use the full executable paths above):
+
+```powershell
 woo-sync sync data/catalog.json --stock-authority woocommerce
-# Zapis wymaga osobnej świadomej decyzji:
+# After reviewing the plan, an explicit write invocation:
 woo-sync sync data/catalog.json --stock-authority woocommerce --apply
 ```
 
-Domyślnie `sync` wykonuje PLAN: wszystkie produkty są walidowane i planowane przed pierwszym ewentualnym zapisem. PUT zawiera tylko różniące się pola; SKIP nie zapisuje. JSONL zawiera różnice przed/po, ID, operacje, błędy oraz podsumowanie run_id/duration_ms/liczników żądań. Kody wyjścia: 0 sukces, 1 błąd API, 2 walidacja/konfiguracja.
+Credentials come from ignored `.secrets/woocommerce.json` or `WC_URL`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`. Python does not automatically load Compose's `.env`. Media IDs are database-specific; regenerate the local manifest when setting up another store.
 
-Wymagane pola: `sku,name,regular_price,stock_quantity,status`. Obsługiwane opcjonalne: `description,short_description,categories,image_id,image_url,image_alt`. UTF-8, CSV oddzielany przecinkiem, kwoty z kropką. Kategorie wskazują istniejące slugi rozdzielone `|`; JSON może mapować `asset` przez `data/media.local.json`. Brak opcjonalnego pola oznacza brak zarządzania nim, co jest różne od pustej wartości. Tylko produkty simple; warianty i promocje poza zakresem.
+## AI workflow
 
-Domyślny `--stock-authority source` traktuje stan z pliku jako nadrzędny. `woocommerce` zachowuje stan istniejących produktów po sprzedaży (nowy produkt otrzymuje stan początkowy ze źródła). Jest to istotne przy planowaniu aktualizacji treści.
-
-## Lokalne AI
+This example uses only checked-in inputs and the offline provider:
 
 ```powershell
-woo-ai propose tmp/one-product.json --media data/media.local.json --provider llamacpp --out tmp/proposal.json
-# Przejrzyj treść, następnie jawnie approve albo reject:
+woo-ai propose data/catalog.json --provider demo --out tmp/proposal.json
+# Read the file and compare every claim with the source before approving:
 woo-ai approve tmp/proposal.json BL-KEY-01
 woo-ai apply-proposal data/catalog.json tmp/proposal.json --out tmp/reviewed.csv
+woo-sync validate tmp/reviewed.csv
+# Requires a configured store; reads only:
 woo-sync sync tmp/reviewed.csv --stock-authority woocommerce
 ```
 
-`apply-proposal` oznacza wyłącznie lokalną materializację CSV, nie zapis do WooCommerce. Domyślny lokalny endpoint to `http://127.0.0.1:8080`, model alias `jarvis-qwen35-9b`. Konfiguracja przez `LLAMACPP_BASE_URL` / `LLAMACPP_MODEL`, bez klucza API. Provider wymusza loopback, blokuje przekierowania/proxy i ogranicza odpowiedź. AI nie może zmieniać nazwy, ceny, stanu ani statusu. Prompt nie zastępuje rzeczowego review.
+Only approved entries change; other catalog rows keep their source content. Use a new output filename for each proposal/materialization. `apply-proposal` **does not write to WooCommerce**.
 
-OpenAI jest opcjonalny (`--provider openai`, `OPENAI_API_KEY`, opcjonalne `OPENAI_MODEL`) i ma testy mockowane; lokalny E2E nie potrzebuje credits.
+For real local inference, select `--provider llamacpp`; configure `LLAMACPP_BASE_URL` (default `http://127.0.0.1:8080`) and `LLAMACPP_MODEL` (default local alias `jarvis-qwen35-9b`). Bring your own compatible model/server: neither is shipped here. The verified alias actually loaded **Qwen3VL-8B-Instruct-Q4_K_M**, with text-only requests. Local transport rejects non-loopback endpoints, redirects and system proxies.
 
-## Testy bez instalacji do embedded Pythona
+OpenAI is optional: `--provider openai`, `OPENAI_API_KEY`, optionally `OPENAI_MODEL`. It sends selected product data to an external service and may incur charges; its provider tests use mocks. [Workflow and limitations](docs/stage3-ai-content.md).
+
+## Tests
 
 ```powershell
-& 'C:\AI\ComfyUI_windows_portable\python_embeded\python.exe' -X utf8 scripts/run-tests.py
+python scripts/run-tests.py
+git diff --check
 ```
 
-Runner sam dodaje `src/` do ścieżki importu. Nie wymaga pip ani zmiany embedded runtime. Aktualny wynik: **89 testów OK**. Szczegółowe polecenia CLI dla embedded Pythona są w dokumentacji Stage 3.
+The runner discovers the full suite and blocks socket networking. All **89 tests** run without WooCommerce, llama.cpp, OpenAI or credentials. [GitHub Actions](.github/workflows/tests.yml) runs the same suite on push and pull requests, using Python 3.10 and 3.13 on Ubuntu and Windows. Installing Python/build tools may require network access; the regression suite does not.
 
-Rzeczywisty lokalny E2E: **CREATE 0 / UPDATE 1 / SKIP 5 / ERROR 0; GET 7 / POST 0 / PUT 0**. Zmieniają się tylko dwa opisy BL-KEY-01 w planie; sklep nie został zapisany. Dowód zawiera też blokady pending, stale source i edycji treści po approval.
+Live acceptance scripts in `scripts/verify-*.py` are separate, stateful historical scenarios that can write to a configured store. They are not part of CI and should not be run against unrelated data.
 
-## Sekrety i granice demonstracji
+## Verified results
 
-Dane WooCommerce są pobierane z ignorowanego `.secrets/woocommerce.json` lub zmiennych `WC_URL`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`. `.env` służy Compose; Python nie wczytuje go automatycznie. Nie wpisuj kluczy do źródeł produktów, dokumentacji i Git. Publiczne sklepy wymagają HTTPS; lokalny HTTP korzysta z OAuth 1.0a bez przesyłania sekretu.
+| Recorded scenario | Result | Evidence |
+|---|---|---|
+| WooCommerce price/stock update and invalid input/auth | Only price/stock updated; invalid CSV and HTTP 401 preserved six products | [API results](docs/api-test-results.json) |
+| Guest checkout, offline payment | 179.00 + 12.90 = 191.90 PLN; no payment or email delivery | [Checkout](docs/checkout-test-results.json) |
+| Public Sheets → WooCommerce PLAN | CREATE 0 / UPDATE 0 / SKIP 6 / ERROR 0; GET 7 / POST 0 / PUT 0 | [Sheets results](docs/google-sheets-integration-results.json) |
+| Real local llama.cpp → reviewed CSV → PLAN | CREATE 0 / UPDATE 1 / SKIP 5 / ERROR 0; GET 7 / POST 0 / PUT 0 | [Local AI results](docs/stage3-local-ai-results.json) |
 
-Sklep używa fikcyjnych danych, metody offline, nie pobiera pieniędzy ani nie wysyła e-maili. Shared llama.cpp pozostaje skonfigurowany poza tym repo; jego szeroka ekspozycja portu została opisana z rekomendacją osobnej migracji, bez przerywania innych usług.
+The local AI test planned two description changes and confirmed unchanged store data. Review was performed by Codex under the owner's delegated acceptance-test instruction, **not an independent human sign-off**. Recorded older test counts describe earlier stages; the final regression baseline is 89. These are functional acceptance results, not throughput benchmarks.
 
-## Dokumentacja i dowody
+## Project stages
 
-- [Architektura](docs/architecture.md)
-- [Stage 2 — źródła i polityka stanu](docs/stage2-data-pipeline.md)
-- [Stage 3 — workflow, Windows, grounding i ograniczenia](docs/stage3-ai-content.md)
-- [Wynik prawdziwego lokalnego AI E2E](docs/stage3-local-ai-results.json)
-- [Audyt bezpieczeństwa llama.cpp](docs/llamacpp-security-review.md)
-- [Historyczny test Stage 3 demo](docs/stage3-ai-workflow-results.json)
-- [Test API Stage 1](docs/api-test-results.json) i [checkout](docs/checkout-test-results.json)
+1. **v1.0.0 — Store and synchronizer:** Docker, theme, fictional catalog, offline checkout and REST synchronization.
+2. **v1.1.0 — Data pipeline:** canonical JSON, adapters, stock ownership and run reporting.
+3. **v1.2.0 — Reviewed AI content:** provider abstraction, local structured output, review integrity and materialization.
+
+Portfolio/CI changes follow v1.2.0 without moving the tag. Python package metadata retains its separate initial `0.1.0` version; Git tags identify project milestones.
+
+## Documentation
+
+- [Windows setup](docs/WINDOWS.md) and [demo data / artwork](data/README.md)
+- [Architecture](docs/architecture.md) and [Stage 2 pipeline](docs/stage2-data-pipeline.md)
+- [Stage 3 workflow](docs/stage3-ai-content.md) and [historical demo-provider results](docs/stage3-ai-workflow-results.json)
+- [llama.cpp security review](docs/llamacpp-security-review.md)
+- [Portfolio case study](docs/portfolio-case-study.md) and [public-release audit](docs/public-release-audit.md)
+
+## Limitations
+
+Simple products only; no variations or sale-price workflow. Categories must already exist. There is no cross-product rollback, scheduling service, production deployment or authenticated multi-user review system. Source-owned fields can overwrite store differences; stock protection is not a content-only update mode.
+
+Model schema validation does not establish factual truth. ALT proposals use source text, not image understanding. Local integrity hashes cannot defend against a malicious owner who can rewrite both files and hashes. CSV export rejects mixed optional-field presence when it cannot preserve semantics.
+
+The historical shared llama.cpp server exposed its port on all interfaces; [remediation is documented](docs/llamacpp-security-review.md), but its configuration was not changed. Public repository readiness is separate from server/deployment security. The storefront and checkout remain local demonstrations with fictional data.

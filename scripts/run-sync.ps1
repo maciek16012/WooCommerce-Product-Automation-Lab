@@ -14,7 +14,7 @@ try {
     if (-not (Test-Path -LiteralPath $labPython)) {
         $labPythonCommand=Get-Command python -ErrorAction SilentlyContinue
         if ($labPythonCommand) { $labPython=$labPythonCommand.Source }
-        else { $labPython=Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' }
+        else { throw 'Install Python 3.10+ and create .venv; see docs/WINDOWS.md.' }
     }
     if (-not (Test-Path -LiteralPath $labPython)) { throw 'Zainstaluj Python 3.10+ i utwórz .venv; patrz docs/WINDOWS.md.' }
     $env:PYTHONPATH=Join-Path $labRoot 'src'

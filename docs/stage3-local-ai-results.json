@@ -3,7 +3,7 @@
   "verified": true,
   "baseline": {
     "branch": "feature/ai-content-pipeline",
-    "head": "8a52490",
+    "head": "762c184",
     "tests": 57,
     "result": "OK",
     "initial_worktree": "existing llama.cpp draft and four tests were uncommitted"
@@ -112,5 +112,5 @@
     "after_sha256": "59cd54317d3bd2b0e1b13c865e564a3d1ba0435333faa65f4be5084398f3afd5",
     "method": "read-only WooCommerce PHP product snapshot; excludes API nonces"
   },
-  "implementation_commit": "a78ba2f"
+  "implementation_commit": "3b67005"
 }

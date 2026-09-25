@@ -16,3 +16,15 @@ dist/
 *.sql
 *.log
 /tmp/
+# Additional local outputs and credential containers
+.venv-*/
+*.jsonl
+*.dump
+*.bak
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+.coverage
+htmlcov/

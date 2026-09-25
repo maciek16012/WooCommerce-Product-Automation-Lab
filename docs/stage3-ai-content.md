@@ -40,9 +40,11 @@ Dozwolone hosty: dokładnie `127.0.0.1`, `localhost`, `::1`; HTTP i HTTPS. Base 
 
 Uwaga: alias `jarvis-qwen35-9b` nie opisuje faktycznych wag. Zweryfikowany preset używa **Qwen3VL-8B-Instruct-Q4_K_M.gguf** i odpowiadającego mmproj. Ten pipeline wysyła wyłącznie tekst — nie uruchamia analizy zdjęcia. ALT musi wynikać z istniejącego źródłowego ALT.
 
-## Uruchomienie na Windows bez instalacji pakietów
+## Historyczne środowisko Windows: embedded Python
 
-Obecny embedded Python nie widzi automatycznie repozytoryjnego `src/`. Nie zmieniaj `python*._pth`, nie instaluj niczego do embedded runtime. W PowerShell, w katalogu repozytorium:
+Dla nowej instalacji użyj [standardowego Pythona i venv](WINDOWS.md). Poniższe polecenia zachowują zweryfikowane środowisko historycznego testu i nie są zależnością projektu.
+
+Użyty wtedy embedded Python nie widzi automatycznie repozytoryjnego `src/`. Nie zmieniaj `python*._pth`, nie instaluj niczego do embedded runtime. W PowerShell, w katalogu repozytorium:
 
 ```powershell
 $py = 'C:\AI\ComfyUI_windows_portable\python_embeded\python.exe'
