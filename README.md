@@ -1,91 +1,73 @@
 # WooCommerce Product Automation Lab
 
-Pierwszy kamień milowy: walidacja CSV i synchronizacja prostych produktów przez WooCommerce REST API v3. SKU jest kluczem dopasowania. Nowy produkt zostaje utworzony, zmieniony otrzymuje aktualizację tylko różniących się pól, a identyczny jest pomijany. Raport każdej operacji zapisuje się w JSONL.
+Lokalny projekt portfolio łączący sklep **Biurko / Lab**, deterministyczną synchronizację produktów i **propozycje treści AI wymagające review**. Nic nie jest publikowane automatycznie.
 
-## Uruchomienie
+- **Stage 1 / v1.0.0:** WordPress, WooCommerce i MariaDB w Dockerze; autorski sklep, katalog, koszyk i fikcyjny checkout. CSV → CREATE / UPDATE / SKIP, REST v3 po SKU, OAuth dla lokalnego HTTP.
+- **Stage 2 / v1.1.0:** canonical `data/catalog.json`, adaptery CSV / JSON / publiczny Google Sheets CSV, wspólna walidacja, polityka właściciela stanu i raporty RUN_SUMMARY.
+- **Stage 3 / gałąź do review:** demo, OpenAI Responses oraz rzeczywisty lokalny llama.cpp; pending → review → approved/rejected → fingerprint → walidowany CSV → zwykły WooCommerce PLAN.
 
-Wymagany Python 3.10+ i sklep WordPress z WooCommerce, włączonymi przyjaznymi odnośnikami oraz kluczem REST API z uprawnieniem **Read/Write**. Publiczne wdrożenia powinny korzystać z HTTPS; lokalne środowisko demonstracyjne może działać przez HTTP wyłącznie na interfejsie loopback. W katalogu projektu:
-
-```bash
-python -m venv .venv
-# Linux/macOS: source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -e .
-woo-sync validate data/products.example.csv
-```
-
-Ustaw dane środowiskowe w terminalu. Plik `.env.example` jest wzorem, program nie wczytuje `.env` samoczynnie. Nie wpisuj kluczy do CSV ani do repozytorium.
-
-PowerShell:
+## Uruchomienie sklepu
 
 ```powershell
-$env:WC_URL = "https://twoj-sklep.example"
-$env:WC_CONSUMER_KEY = "ck_..."
-$env:WC_CONSUMER_SECRET = "cs_..."
-woo-sync sync data/products.example.csv
-woo-sync sync data/products.example.csv --apply
+Set-Location C:\AI\WooCommerceProductAutomationLab
+docker compose up -d
 ```
 
-Bash:
+Sklep: http://localhost:8090; panel: http://localhost:8090/wp-admin/. Port WordPressa jest przypięty do `127.0.0.1`. Wolumeny przechowują dane; nie używaj `docker compose down -v`.
 
-```bash
-export WC_URL="https://twoj-sklep.example"
-export WC_CONSUMER_KEY="ck_..."
-export WC_CONSUMER_SECRET="cs_..."
-woo-sync sync data/products.example.csv
-woo-sync sync data/products.example.csv --apply
+## Synchronizacja
+
+W standardowym Pythonie 3.10+ można utworzyć `.venv` i wykonać `python -m pip install -e .`. Runtime synchronizatora i providerów korzysta wyłącznie z biblioteki standardowej.
+
+```powershell
+woo-sync validate data/catalog.json
+woo-sync sync data/catalog.json --stock-authority woocommerce
+# Zapis wymaga osobnej świadomej decyzji:
+woo-sync sync data/catalog.json --stock-authority woocommerce --apply
 ```
 
-Pierwsze `sync` jest **planem**: odczytuje istniejące produkty i raportuje CREATE/UPDATE/SKIP, lecz niczego nie zapisuje. `--apply` wykonuje zapis. Najpierw użyj osobnego sklepu testowego lub produktów ze statusem `draft`. Aby produkty stały się widoczne, ustaw `status=publish` w CSV i świadomie uruchom `--apply`. Dla własnego pliku użyj `woo-sync sync moja_lista.csv --log raport.jsonl`.
+Domyślnie `sync` wykonuje PLAN: wszystkie produkty są walidowane i planowane przed pierwszym ewentualnym zapisem. PUT zawiera tylko różniące się pola; SKIP nie zapisuje. JSONL zawiera różnice przed/po, ID, operacje, błędy oraz podsumowanie run_id/duration_ms/liczników żądań. Kody wyjścia: 0 sukces, 1 błąd API, 2 walidacja/konfiguracja.
 
-## Format CSV
+Wymagane pola: `sku,name,regular_price,stock_quantity,status`. Obsługiwane opcjonalne: `description,short_description,categories,image_id,image_url,image_alt`. UTF-8, CSV oddzielany przecinkiem, kwoty z kropką. Kategorie wskazują istniejące slugi rozdzielone `|`; JSON może mapować `asset` przez `data/media.local.json`. Brak opcjonalnego pola oznacza brak zarządzania nim, co jest różne od pustej wartości. Tylko produkty simple; warianty i promocje poza zakresem.
 
-Nagłówek dokładnie: `sku,name,regular_price,stock_quantity,status`. UTF-8, przecinek jako separator, kropka dziesiętna, cena z maksymalnie dwiema cyframi po kropce, stan całkowity nieujemny, status `draft`, `publish`, `pending` lub `private`. Każde SKU w pliku musi być unikalne. CSV jest w całości walidowany przed pierwszym wywołaniem API.
+Domyślny `--stock-authority source` traktuje stan z pliku jako nadrzędny. `woocommerce` zachowuje stan istniejących produktów po sprzedaży (nowy produkt otrzymuje stan początkowy ze źródła). Jest to istotne przy planowaniu aktualizacji treści.
 
-Synchronizator zarządza nazwą, regularną ceną, stanem magazynowym (`manage_stock=true`) i statusem prostego produktu. Pozostałych pól istniejącego produktu nie zmienia. Nie obsługuje jeszcze wariantów, kategorii, obrazów, cen promocyjnych i opisów. API może normalizować niektóre pola, dlatego raport `SKIP` oznacza zgodność pól objętych tą wersją, nie całego produktu.
+## Lokalne AI
 
-Raport w `logs/sync-*.jsonl` zawiera po jednym wierszu na SKU: `action`, `mode`, zmienione `fields`, identyfikator produktu lub błąd. Przy błędach wyjście ma kod 1; błędny CSV lub konfiguracja daje kod 2. Jeśli POST/PUT zwróci błąd sieci po wysłaniu żądania, sprawdź produkt w WooCommerce przed ponowieniem. Program nie ponawia automatycznie zapisów.
-
-## Testy
-
-```bash
-python -m unittest discover -s tests -v
+```powershell
+woo-ai propose tmp/one-product.json --media data/media.local.json --provider llamacpp --out tmp/proposal.json
+# Przejrzyj treść, następnie jawnie approve albo reject:
+woo-ai approve tmp/proposal.json BL-KEY-01
+woo-ai apply-proposal data/catalog.json tmp/proposal.json --out tmp/reviewed.csv
+woo-sync sync tmp/reviewed.csv --stock-authority woocommerce
 ```
 
-## Następne etapy
+`apply-proposal` oznacza wyłącznie lokalną materializację CSV, nie zapis do WooCommerce. Domyślny lokalny endpoint to `http://127.0.0.1:8080`, model alias `jarvis-qwen35-9b`. Konfiguracja przez `LLAMACPP_BASE_URL` / `LLAMACPP_MODEL`, bez klucza API. Provider wymusza loopback, blokuje przekierowania/proxy i ogranicza odpowiedź. AI nie może zmieniać nazwy, ceny, stanu ani statusu. Prompt nie zastępuje rzeczowego review.
 
-Kategorie i obrazy z ALT, opisy, źródło Google Sheets, raporty jakości danych, SEO i pomiary wydajności sklepu. Osobny moduł AI powstanie po uruchomieniu podstawowej synchronizacji i będzie wymagał zatwierdzenia treści przez człowieka.
+OpenAI jest opcjonalny (`--provider openai`, `OPENAI_API_KEY`, opcjonalne `OPENAI_MODEL`) i ma testy mockowane; lokalny E2E nie potrzebuje credits.
 
-Dokumentacja pól i uwierzytelniania: [WooCommerce Products v3](https://developer.woocommerce.com/docs/apis/rest-api/v3/products/) · [Authentication](https://developer.woocommerce.com/docs/apis/rest-api/authentication/).
+## Testy bez instalacji do embedded Pythona
 
+```powershell
+& 'C:\AI\ComfyUI_windows_portable\python_embeded\python.exe' -X utf8 scripts/run-tests.py
+```
 
-## Zweryfikowane środowisko demonstracyjne
+Runner sam dodaje `src/` do ścieżki importu. Nie wymaga pip ani zmiany embedded runtime. Aktualny wynik: **89 testów OK**. Szczegółowe polecenia CLI dla embedded Pythona są w dokumentacji Stage 3.
 
-Projekt zawiera lokalny sklep **Biurko / Lab** uruchamiany przez Docker Compose na `http://localhost:8090`.
+Rzeczywisty lokalny E2E: **CREATE 0 / UPDATE 1 / SKIP 5 / ERROR 0; GET 7 / POST 0 / PUT 0**. Zmieniają się tylko dwa opisy BL-KEY-01 w planie; sklep nie został zapisany. Dowód zawiera też blokady pending, stale source i edycji treści po approval.
 
-Przetestowano pełny przepływ:
+## Sekrety i granice demonstracji
 
-`CSV → walidacja → dry-run → CREATE/UPDATE/SKIP → WooCommerce REST API → sklep → koszyk → checkout`
+Dane WooCommerce są pobierane z ignorowanego `.secrets/woocommerce.json` lub zmiennych `WC_URL`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`. `.env` służy Compose; Python nie wczytuje go automatycznie. Nie wpisuj kluczy do źródeł produktów, dokumentacji i Git. Publiczne sklepy wymagają HTTPS; lokalny HTTP korzysta z OAuth 1.0a bez przesyłania sekretu.
 
-Potwierdzone scenariusze:
+Sklep używa fikcyjnych danych, metody offline, nie pobiera pieniędzy ani nie wysyła e-maili. Shared llama.cpp pozostaje skonfigurowany poza tym repo; jego szeroka ekspozycja portu została opisana z rekomendacją osobnej migracji, bez przerywania innych usług.
 
-- 6 produktów utworzonych przez synchronizator,
-- ponowna synchronizacja bez zmian: 6 × `SKIP`,
-- aktualizacja wyłącznie zmienionych pól ceny i stanu magazynowego,
-- błędny CSV zatrzymuje proces przed zapisem,
-- HTTP 401 nie zmienia danych produktów,
-- 16 testów jednostkowych przechodzi poprawnie,
-- checkout 179,00 zł + 12,90 zł = 191,90 zł,
-- darmowa dostawa działa od 250,00 zł,
-- płatna dostawa jest ukrywana przy dostępnej darmowej,
-- lokalny checkout nie pobiera pieniędzy i nie wysyła e-maili.
+## Dokumentacja i dowody
 
-Dokumentacja:
-
-- `docs/api-test-results.json`
-- `docs/checkout-test-results.json`
-- `docs/architecture.md`
-
-### Bezpieczeństwo lokalnego API
-
-Publiczne instalacje powinny korzystać z HTTPS. Lokalny lab działa na interfejsie loopback i dla HTTP wykorzystuje podpisane żądania OAuth 1.0a. Dane dostępowe są przechowywane poza repozytorium w `.secrets/`.
+- [Architektura](docs/architecture.md)
+- [Stage 2 — źródła i polityka stanu](docs/stage2-data-pipeline.md)
+- [Stage 3 — workflow, Windows, grounding i ograniczenia](docs/stage3-ai-content.md)
+- [Wynik prawdziwego lokalnego AI E2E](docs/stage3-local-ai-results.json)
+- [Audyt bezpieczeństwa llama.cpp](docs/llamacpp-security-review.md)
+- [Historyczny test Stage 3 demo](docs/stage3-ai-workflow-results.json)
+- [Test API Stage 1](docs/api-test-results.json) i [checkout](docs/checkout-test-results.json)
