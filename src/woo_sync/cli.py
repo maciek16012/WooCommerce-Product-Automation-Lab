@@ -27,15 +27,15 @@ def main(argv=None):
 
     parser.add_argument(
         "source_file",
-        type=Path,
-        help="Plik CSV albo JSON z produktami",
+        type=str,
+        help="Plik CSV/JSON albo publiczny URL Google Sheets",
     )
 
     parser.add_argument(
         "--source-type",
-        choices=("auto", "csv", "json"),
+        choices=("auto", "csv", "json", "sheets"),
         default="auto",
-        help="Typ źródła; auto rozpoznaje format po rozszerzeniu",
+        help="Typ źródła; auto rozpoznaje plik albo URL Google Sheets",
     )
 
     parser.add_argument(

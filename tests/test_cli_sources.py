@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 import unittest
@@ -102,6 +103,40 @@ class CliSourceTests(unittest.TestCase):
         self.assertEqual(result, 2)
         client.assert_not_called()
 
+    def test_validate_google_sheet_source(self):
+        log = self.root / "sheet.jsonl"
+
+        payload = (
+            "sku,name,regular_price,stock_quantity,status\n"
+            "A-1,Produkt,19.90,4,publish\n"
+        ).encode("utf-8")
+
+        url = (
+            "https://docs.google.com/spreadsheets/d/"
+            "demo/export?format=csv&gid=0"
+        )
+
+        with patch(
+            "urllib.request.OpenerDirector.open",
+            return_value=io.BytesIO(payload),
+        ):
+            result = main(
+                [
+                    "validate",
+                    url,
+                    "--log",
+                    str(log),
+                ]
+            )
+
+        self.assertEqual(result, 0)
+
+        record = json.loads(
+            log.read_text(encoding="utf-8")
+        )
+
+        self.assertTrue(record["valid"])
+        self.assertEqual(record["rows"], 1)
     def test_explicit_source_type_json(self):
         catalog = self.write_valid_catalog()
         log = self.root / "explicit.jsonl"
