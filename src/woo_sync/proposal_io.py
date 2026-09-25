@@ -11,12 +11,15 @@ from pathlib import Path
 from .content_proposals import validate_proposal
 from .core import ProductRow, ValidationError
 
-CSV_FIELDS = (
+REQUIRED_CSV_FIELDS = (
     "sku",
     "name",
     "regular_price",
     "stock_quantity",
     "status",
+)
+
+OPTIONAL_CSV_FIELDS = (
     "description",
     "short_description",
     "categories",
@@ -125,7 +128,7 @@ def row_to_csv_record(row):
 
 
 def write_materialized_csv(path, rows):
-    """Write approved ProductRows as a normal sync-compatible CSV."""
+    """Write ProductRows without inventing unmanaged optional fields."""
 
     path = Path(path)
     rows = list(rows)
@@ -133,13 +136,22 @@ def write_materialized_csv(path, rows):
     if not rows:
         raise ValidationError("Brak produktów do materializacji")
 
+    managed_optional = [
+        field
+        for field in OPTIONAL_CSV_FIELDS
+        if any(field in row.extra for row in rows)
+    ]
+
+    fields = list(REQUIRED_CSV_FIELDS) + managed_optional
+
     path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         with path.open("x", encoding="utf-8", newline="") as stream:
             writer = csv.DictWriter(
                 stream,
-                fieldnames=CSV_FIELDS,
+                fieldnames=fields,
+                extrasaction="ignore",
             )
             writer.writeheader()
 
