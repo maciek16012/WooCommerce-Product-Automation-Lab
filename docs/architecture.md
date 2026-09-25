@@ -45,3 +45,11 @@ Dla HTTP na loopback synchronizator wykorzystuje podpis OAuth 1.0a. Publiczne wd
 - Zamówienie testowe powstaje przez standardowy checkout WooCommerce.
 - Wysyłka e-mail jest wyłączona.
 - Rzeczywiste płatności nie są wykonywane.
+
+## Stage 2 i Stage 3
+
+Wspólna reprezentacja `ProductRow[]` obsługuje CSV, canonical JSON i publiczny Google Sheets CSV. Polityka `--stock-authority woocommerce` zachowuje stan istniejących produktów; szczegóły w [Stage 2](stage2-data-pipeline.md).
+
+Provider `demo`, `openai` lub `llamacpp` może wygenerować wyłącznie propozycję pól treści. Ta trafia do pliku pending, przechodzi jawny review oraz kontrolę fingerprintu źródła i zatwierdzonej treści. Dopiero zwalidowany, atomowo opublikowany CSV wraca do zwykłego planera. Materializacja nie ma klienta WooCommerce ani uprawnień zapisu do sklepu.
+
+Pełny diagram, lokalne uruchamianie i granice zabezpieczeń: [Stage 3](stage3-ai-content.md). Rzeczywisty test lokalnego modelu: [dowód E2E](stage3-local-ai-results.json). Konfiguracja zewnętrznego wobec repo kontenera: [audyt llama.cpp](llamacpp-security-review.md).

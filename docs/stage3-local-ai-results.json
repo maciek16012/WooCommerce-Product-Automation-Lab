@@ -1,0 +1,116 @@
+{
+  "scenario": "local_llamacpp_content_review_materialize_woo_plan",
+  "verified": true,
+  "baseline": {
+    "branch": "feature/ai-content-pipeline",
+    "head": "8a52490",
+    "tests": 57,
+    "result": "OK",
+    "initial_worktree": "existing llama.cpp draft and four tests were uncommitted"
+  },
+  "provider": {
+    "name": "llamacpp",
+    "model_alias": "jarvis-qwen35-9b",
+    "backend_model": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+    "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+    "inference_requests": 2,
+    "structured_output": "json_schema",
+    "first_result": "grounded but unchanged copy; editorial prompt refined"
+  },
+  "proposal": {
+    "id": "1510a9de093c4b2aa72b686f3033bb86",
+    "created_at": "2026-09-25T18:08:25.792056+00:00",
+    "sku": "BL-KEY-01",
+    "initial_approval": "pending",
+    "final_approval": "approved",
+    "source_fingerprint": "dd7f06dc3a9794f0f3fa249d2ae8efdafc89ee387a7b34c370461181742838e9",
+    "proposed": {
+      "description": "Klawiatura przewodowa Forma 87 z układem TKL, przewodem USB-A o długości 1,8 m, grafitową obudową, jasnym klawiszem spacji i oliwkowym akcentem. Układ US ANSI, obsługa polskich znaków przez ustawienia systemu. Wymiary demonstracyjne: 360 × 140 × 32 mm. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.",
+      "short_description": "Klawiatura z układem 87 klawiszy, przewodem USB-A i grafitową obudową.",
+      "image_alt": "Grafitowa klawiatura z jasnym klawiszem spacji i limonkowym Enterem"
+    },
+    "review": {
+      "decision": "approved",
+      "reviewed_at": "2026-09-25T18:09:59.155437+00:00",
+      "content_fingerprint": "130348d517b9ec5c5773065d92e77fe7af942f0e9a754bba750ba3eff47a51e0"
+    },
+    "review_performed_by": "Codex, delegated by the user for this acceptance test; not a separate human sign-off"
+  },
+  "grounding_review": {
+    "new_unsupported_claims": false,
+    "windows_added": false,
+    "compatibility_added": false,
+    "certificates_added": false,
+    "new_parameters_added": false,
+    "undocumented_uses_added": false,
+    "alt_unchanged": true,
+    "demo_notice_preserved": true,
+    "basis": [
+      "TKL and US ANSI: source description",
+      "USB-A 1.8 m: source description",
+      "360 × 140 × 32 mm: source description",
+      "87 keys: source short description",
+      "graphite, light spacebar, olive accent: source description",
+      "Polish characters via system settings: source description"
+    ]
+  },
+  "safeguards": {
+    "pending_materialization_exit": 2,
+    "pending_output_absent": true,
+    "stale_source_blocked": true,
+    "edited_approved_content_blocked": true,
+    "master_fields_unchanged": [
+      "name",
+      "regular_price",
+      "stock_quantity",
+      "status"
+    ],
+    "validated_csv_roundtrip": true
+  },
+  "materialization": {
+    "products": 6,
+    "approved_products": 1,
+    "changed_fields": {
+      "BL-KEY-01": [
+        "description",
+        "short_description"
+      ]
+    }
+  },
+  "woocommerce_plan": {
+    "event": "RUN_SUMMARY",
+    "run_id": "f8d0eddd2bed429a8c7e08ecc331f659",
+    "source": "tmp\\stage3-local\\materialized.csv",
+    "source_type": "auto",
+    "mode": "PLAN",
+    "stock_authority": "woocommerce",
+    "duration_ms": 15207.547,
+    "counts": {
+      "CREATE": 0,
+      "UPDATE": 1,
+      "SKIP": 5,
+      "ERROR": 0
+    },
+    "requests": {
+      "GET": 7,
+      "POST": 0,
+      "PUT": 0
+    }
+  },
+  "regression": {
+    "tests": 89,
+    "result": "OK"
+  },
+  "limitations": [
+    "Factual grounding requires review; schema is not a truth checker.",
+    "Local file review hashes protect accidental edits, not a malicious local file owner.",
+    "llama shared service remains bound to all interfaces; migration recommendation documented."
+  ],
+  "woocommerce_products_unchanged": {
+    "verified": true,
+    "before_sha256": "59cd54317d3bd2b0e1b13c865e564a3d1ba0435333faa65f4be5084398f3afd5",
+    "after_sha256": "59cd54317d3bd2b0e1b13c865e564a3d1ba0435333faa65f4be5084398f3afd5",
+    "method": "read-only WooCommerce PHP product snapshot; excludes API nonces"
+  },
+  "implementation_commit": "a78ba2f"
+}
