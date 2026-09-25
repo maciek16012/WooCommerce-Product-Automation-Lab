@@ -1,0 +1,38 @@
+{
+  "scenario": "google_sheets_to_woocommerce_live_plan",
+  "verified": true,
+  "source": {
+    "type": "google_sheets_public_csv",
+    "products": 6,
+    "url_committed": false
+  },
+  "validation": {
+    "result": "success",
+    "products": 6
+  },
+  "woocommerce": {
+    "mode": "PLAN",
+    "stock_authority": "woocommerce",
+    "counts": {
+      "CREATE": 0,
+      "UPDATE": 0,
+      "SKIP": 6,
+      "ERROR": 0
+    },
+    "requests": {
+      "GET": 7,
+      "POST": 0,
+      "PUT": 0
+    }
+  },
+  "tests": {
+    "total": 28,
+    "result": "OK"
+  },
+  "notes": [
+    "Google Sheets was consumed through a read-only public CSV endpoint.",
+    "The same shared validation pipeline is used by CSV, JSON and Google Sheets.",
+    "The live WooCommerce run was plan-only and performed no writes.",
+    "WooCommerce stock authority preserved inventory changes caused by test orders."
+  ]
+}
