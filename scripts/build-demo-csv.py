@@ -1,18 +1,95 @@
-"""Build demo CSV with media IDs imported by setup-store.php."""
-import csv,json
+"""Build demo CSV from canonical catalog.json and local media manifest."""
+
+import csv
+import json
 from pathlib import Path
-root=Path(__file__).resolve().parents[1]
-media=json.loads((root/'data/media.local.json').read_text())
-products=[
-('BL-KEY-01','Klawiatura przewodowa Forma 87','179.00',21,'peryferia','keyboard','Grafitowa klawiatura z jasnym klawiszem spacji i limonkowym Enterem','Kompaktowy układ 87 klawiszy. Więcej miejsca na mysz i spokojny rytm pracy.','Fikcyjna klawiatura Forma 87 łączy kompaktowy układ TKL z wygodnym przewodem USB-A o długości 1,8 m. Grafitowa obudowa, jasny klawisz spacji i oliwkowy akcent tworzą spójny zestaw na biurku. Układ US ANSI, obsługa polskich znaków przez ustawienia systemu. Wymiary demonstracyjne: 360 × 140 × 32 mm. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.'),
-('BL-MOU-01','Mysz przewodowa Punkt','79.00',38,'peryferia','mouse','Grafitowa mysz przewodowa z oliwkową rolką','Prosta forma, pewny chwyt i stałe połączenie USB. Bez baterii, bez rozpraszania.','Punkt to fikcyjna mysz optyczna do codziennych zadań. Trzy przyciski, rolka przewijania i przewód USB-A 1,5 m. Symetryczna obudowa pasuje do minimalistycznego stanowiska. Parametry demonstracyjne: 1600 DPI, 110 × 62 × 38 mm, 85 g. Nie wymaga dodatkowych sterowników. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.'),
-('BL-CAB-01','Kabel USB-C Linia · 2 m','39.00',65,'kable','cable','Zwinięty grafitowy kabel USB-C spięty oliwkową opaską','Dwa metry swobody. Elastyczny przewód do ładowania i codziennego przesyłania danych.','Fikcyjny kabel Linia ma dwa złącza USB-C, miękki oplot i opaskę porządkującą. Długość 2 m ułatwia prowadzenie przewodu wzdłuż biurka. Parametry demonstracyjne: USB 2.0, transfer do 480 Mb/s, ładowanie do 60 W z kompatybilną ładowarką. Nie obsługuje transmisji obrazu. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.'),
-('BL-HUB-01','Hub USB-A Most · 4 porty','89.00',19,'kable','hub','Grafitowy hub z czterema portami USB-A i krótkim przewodem','Jedno wejście, cztery połączenia. Miejsce na klawiaturę, mysz i drobne akcesoria.','Most to fikcyjny hub z czterema portami USB-A i przewodem USB-A 20 cm. Aluminiowa obudowa z grafitowym wykończeniem dobrze komponuje się z peryferiami kolekcji. Parametry demonstracyjne: USB 3.0 do 5 Gb/s, 105 × 35 × 18 mm. Zasilanie z portu komputera; nie służy jako ładowarka ani stacja do obrazu. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.'),
-('BL-STD-01','Podstawka pod monitor Poziom','159.00',16,'organizacja','stand','Jasna drewniana podstawka pod monitor na grafitowych nogach','Monitor wyżej, drobiazgi pod spodem. Prosty sposób na odzyskanie przestrzeni.','Poziom to fikcyjna podstawka z blatem w odcieniu jasnego drewna i stalowymi nogami. Pod blatem mieści się klawiatura lub notes. Parametry demonstracyjne: 500 × 220 × 110 mm, nośność do 10 kg, antypoślizgowe stopki. Przeznaczona do płaskiego, stabilnego biurka; nie zastępuje mocowania VESA. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.'),
-('BL-ORG-01','Uchwyty do kabli Ład · 4 szt.','29.00',80,'organizacja','clips','Cztery grafitowo-oliwkowe uchwyty z uporządkowanymi przewodami','Mały detal, duża różnica. Cztery uchwyty, dzięki którym przewody pozostają pod ręką.','Ład to fikcyjny zestaw czterech samoprzylepnych uchwytów do kabli. Elastyczne gniazdo utrzymuje przewód o średnicy 3–6 mm. Zestaw zawiera dwa grafitowe i dwa oliwkowe uchwyty. Parametry demonstracyjne: 28 × 28 × 14 mm. Montaż na czystej, suchej i gładkiej powierzchni; nie stosować na delikatnych powłokach. Produkt demonstracyjny — nie jest dostępny w rzeczywistej sprzedaży.')]
-fields=['sku','name','regular_price','stock_quantity','status','description','short_description','categories','image_id','image_alt']
-with (root/'data/products.csv').open('w',encoding='utf-8',newline='') as f:
-    w=csv.DictWriter(f,fieldnames=fields);w.writeheader()
-    for sku,name,price,stock,cat,asset,alt,short,desc in products:
-        w.writerow(dict(sku=sku,name=name,regular_price=price,stock_quantity=stock,status='publish',description=desc,short_description=short,categories=cat,image_id=media[asset],image_alt=alt))
-print('Demo CSV: 6 products / 3 categories')
+
+root = Path(__file__).resolve().parents[1]
+
+catalog = json.loads(
+    (root / "data/catalog.json").read_text(encoding="utf-8")
+)
+
+media = json.loads(
+    (root / "data/media.local.json").read_text(encoding="utf-8")
+)
+
+fields = [
+    "sku",
+    "name",
+    "regular_price",
+    "stock_quantity",
+    "status",
+    "description",
+    "short_description",
+    "categories",
+    "image_id",
+    "image_alt",
+]
+
+required = {
+    "sku",
+    "name",
+    "regular_price",
+    "stock_quantity",
+    "status",
+    "description",
+    "short_description",
+    "categories",
+    "asset",
+    "image_alt",
+}
+
+seen = set()
+
+with (root / "data/products.csv").open(
+    "w",
+    encoding="utf-8",
+    newline="",
+) as stream:
+
+    writer = csv.DictWriter(stream, fieldnames=fields)
+    writer.writeheader()
+
+    for index, product in enumerate(catalog, start=1):
+
+        missing = required - set(product)
+        if missing:
+            raise ValueError(
+                f"Catalog row {index}: missing fields: "
+                + ", ".join(sorted(missing))
+            )
+
+        sku = str(product["sku"])
+
+        if sku.casefold() in seen:
+            raise ValueError(f"Duplicate SKU in catalog: {sku}")
+
+        seen.add(sku.casefold())
+
+        asset = str(product["asset"])
+
+        if asset not in media:
+            raise ValueError(
+                f"Unknown media asset '{asset}' for SKU {sku}"
+            )
+
+        writer.writerow(
+            {
+                "sku": sku,
+                "name": product["name"],
+                "regular_price": product["regular_price"],
+                "stock_quantity": product["stock_quantity"],
+                "status": product["status"],
+                "description": product["description"],
+                "short_description": product["short_description"],
+                "categories": product["categories"],
+                "image_id": media[asset],
+                "image_alt": product["image_alt"],
+            }
+        )
+
+print(
+    f"Demo CSV: {len(catalog)} products / "
+    f"{len({p['categories'] for p in catalog})} categories"
+)
