@@ -1,0 +1,30 @@
+{
+  "scenario": "guest_checkout_flat_rate",
+  "verified": true,
+  "local_test_order_id": 34,
+  "created_via": "checkout",
+  "status": "processing",
+  "product": {
+    "name": "Klawiatura przewodowa Forma 87",
+    "sku": "BL-KEY-01",
+    "quantity": 1,
+    "subtotal": "179.00"
+  },
+  "shipping": {
+    "method": "Dostawa testowa",
+    "method_id": "flat_rate",
+    "total": "12.90"
+  },
+  "payment": {
+    "method_id": "cod",
+    "title": "Zamówienie testowe — bez płatności"
+  },
+  "order_total": "191.90",
+  "email_delivery": "disabled",
+  "notes": [
+    "Zamówienie utworzono przez frontend WooCommerce.",
+    "Użyto wyłącznie fikcyjnych danych klienta.",
+    "Nie wykonano rzeczywistej płatności.",
+    "Wysyłka e-mail jest blokowana w lokalnym środowisku."
+  ]
+}

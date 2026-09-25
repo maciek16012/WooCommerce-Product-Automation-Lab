@@ -4,7 +4,7 @@ Pierwszy kamień milowy: walidacja CSV i synchronizacja prostych produktów prze
 
 ## Uruchomienie
 
-Wymagany Python 3.10+ i sklep WordPress z WooCommerce, adresem HTTPS, włączonymi przyjaznymi odnośnikami oraz kluczem REST API z uprawnieniem **Read/Write**. W katalogu projektu:
+Wymagany Python 3.10+ i sklep WordPress z WooCommerce, włączonymi przyjaznymi odnośnikami oraz kluczem REST API z uprawnieniem **Read/Write**. Publiczne wdrożenia powinny korzystać z HTTPS; lokalne środowisko demonstracyjne może działać przez HTTP wyłącznie na interfejsie loopback. W katalogu projektu:
 
 ```bash
 python -m venv .venv
@@ -57,3 +57,35 @@ python -m unittest discover -s tests -v
 Kategorie i obrazy z ALT, opisy, źródło Google Sheets, raporty jakości danych, SEO i pomiary wydajności sklepu. Osobny moduł AI powstanie po uruchomieniu podstawowej synchronizacji i będzie wymagał zatwierdzenia treści przez człowieka.
 
 Dokumentacja pól i uwierzytelniania: [WooCommerce Products v3](https://developer.woocommerce.com/docs/apis/rest-api/v3/products/) · [Authentication](https://developer.woocommerce.com/docs/apis/rest-api/authentication/).
+
+
+## Zweryfikowane środowisko demonstracyjne
+
+Projekt zawiera lokalny sklep **Biurko / Lab** uruchamiany przez Docker Compose na `http://localhost:8090`.
+
+Przetestowano pełny przepływ:
+
+`CSV → walidacja → dry-run → CREATE/UPDATE/SKIP → WooCommerce REST API → sklep → koszyk → checkout`
+
+Potwierdzone scenariusze:
+
+- 6 produktów utworzonych przez synchronizator,
+- ponowna synchronizacja bez zmian: 6 × `SKIP`,
+- aktualizacja wyłącznie zmienionych pól ceny i stanu magazynowego,
+- błędny CSV zatrzymuje proces przed zapisem,
+- HTTP 401 nie zmienia danych produktów,
+- 16 testów jednostkowych przechodzi poprawnie,
+- checkout 179,00 zł + 12,90 zł = 191,90 zł,
+- darmowa dostawa działa od 250,00 zł,
+- płatna dostawa jest ukrywana przy dostępnej darmowej,
+- lokalny checkout nie pobiera pieniędzy i nie wysyła e-maili.
+
+Dokumentacja:
+
+- `docs/api-test-results.json`
+- `docs/checkout-test-results.json`
+- `docs/architecture.md`
+
+### Bezpieczeństwo lokalnego API
+
+Publiczne instalacje powinny korzystać z HTTPS. Lokalny lab działa na interfejsie loopback i dla HTTP wykorzystuje podpisane żądania OAuth 1.0a. Dane dostępowe są przechowywane poza repozytorium w `.secrets/`.
