@@ -48,6 +48,17 @@ def main(argv=None):
     )
 
     parser.add_argument(
+        "--stock-authority",
+        choices=("source", "woocommerce"),
+        default="source",
+        help=(
+            "Właściciel stock_quantity. source pozwala źródłu "
+            "aktualizować stock; woocommerce zachowuje stock "
+            "istniejących produktów po sprzedaży."
+        ),
+    )
+
+    parser.add_argument(
         "--apply",
         action="store_true",
     )
@@ -142,6 +153,7 @@ def main(argv=None):
                 api,
                 args.apply,
                 log,
+                stock_authority=args.stock_authority,
             )
 
         print(
@@ -153,6 +165,7 @@ def main(argv=None):
                         else "PLAN"
                     ),
                     "counts": counts,
+                    "stock_authority": args.stock_authority,
                     "requests": api.stats,
                     "source": str(args.source_file),
                     "log": str(log),

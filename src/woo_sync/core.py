@@ -348,7 +348,26 @@ def diff_payload(desired,current):
 
 def changes(row,current): return diff_payload(row.payload(),current)
 
-def sync(rows,api,apply,log_path):
+def apply_stock_authority(desired,current,stock_authority):
+    """Apply ownership policy for stock_quantity.
+
+    source:
+        The external source owns stock and may update existing products.
+
+    woocommerce:
+        WooCommerce owns stock for existing products. The source still
+        provides the initial stock when a product is created.
+    """
+    if stock_authority not in ('source','woocommerce'):
+        raise ValidationError('Nieznana polityka stocku')
+
+    if current and stock_authority == 'woocommerce':
+        desired=dict(desired)
+        desired.pop('stock_quantity',None)
+
+    return desired
+
+def sync(rows,api,apply,log_path,stock_authority='source'):
     counts=dict(CREATE=0,UPDATE=0,SKIP=0,ERROR=0)
     log_path.parent.mkdir(parents=True,exist_ok=True)
     with log_path.open('x',encoding='utf-8') as out:
@@ -362,6 +381,11 @@ def sync(rows,api,apply,log_path):
             for row in rows:
                 current=api.find(row.sku)
                 desired=desired_payload(row,current,cats)
+                desired=apply_stock_authority(
+                    desired,
+                    current,
+                    stock_authority,
+                )
                 payload=diff_payload(desired,current) if current else desired
                 action=('UPDATE' if payload else 'SKIP') if current else 'CREATE'
                 plan.append((row,current,payload,action))
