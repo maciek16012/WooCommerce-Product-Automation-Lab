@@ -1,0 +1,1 @@
+<?php get_header(); ?><main id="main" class="wrap page-main"><?php while(have_posts()):the_post(); ?><p class="eyebrow">BIURKO / LAB</p><h1><?php the_title(); ?></h1><div class="page-content"><?php the_content(); ?></div><?php endwhile; ?></main><?php get_footer(); ?>

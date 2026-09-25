@@ -1,0 +1,4 @@
+<!doctype html><html <?php language_attributes(); ?>><head><meta charset="<?php bloginfo('charset'); ?>"><meta name="viewport" content="width=device-width, initial-scale=1"><?php wp_head(); ?></head><body <?php body_class(); ?>><?php wp_body_open(); ?>
+<a class="skip-link" href="#main">Przejdź do treści</a>
+<div class="demo-bar">LOKALNA PRACOWNIA / SKLEP DEMONSTRACYJNY <span>Bez rzeczywistych płatności i wysyłek</span></div>
+<header class="site-header wrap"><a class="brand" href="<?php echo esc_url(home_url('/')); ?>" aria-label="Biurko Lab — strona główna">biurko<span>/</span>lab</a><nav aria-label="Nawigacja główna"><a href="<?php echo esc_url(wc_get_page_permalink('shop')); ?>">Produkty</a><a href="<?php echo esc_url(home_url('/o-pracowni/')); ?>">O pracowni</a><a class="cart-link" href="<?php echo esc_url(wc_get_cart_url()); ?>">Koszyk <span><?php echo WC()->cart ? esc_html(WC()->cart->get_cart_contents_count()):'0'; ?></span></a></nav></header>

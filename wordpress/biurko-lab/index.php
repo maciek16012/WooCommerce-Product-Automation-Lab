@@ -1,0 +1,1 @@
+<?php get_header(); ?><main id="main" class="wrap page-main"><h1>Pracownia Biurko / Lab</h1><p>Wybierz produkty do swojego stanowiska.</p><a class="button" href="<?php echo esc_url(wc_get_page_permalink('shop')); ?>">Zobacz kolekcję</a></main><?php get_footer(); ?>

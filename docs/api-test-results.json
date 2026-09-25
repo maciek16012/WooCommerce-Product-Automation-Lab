@@ -1,0 +1,13 @@
+{
+  "updated_product_id": 25,
+  "updated_product_url": "http://localhost:8090/produkt/klawiatura-przewodowa-forma-87/",
+  "update_fields": [
+    "regular_price",
+    "stock_quantity"
+  ],
+  "new_price": "179.00",
+  "new_stock": 21,
+  "invalid_csv_exit": 2,
+  "api_failure": "HTTP 401",
+  "products_preserved": 6
+}
