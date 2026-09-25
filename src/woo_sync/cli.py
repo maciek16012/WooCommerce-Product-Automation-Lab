@@ -1,37 +1,207 @@
-"""Validation precedes credentials/network; --apply explicitly enables writes."""
-import argparse, json, os, sys
+"""Source validation precedes credentials/network; --apply explicitly enables writes."""
+
+import argparse
+import json
+import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from .core import ValidationError, WooClient, load_csv, sync
+
+from .core import ValidationError, WooClient, sync
 from .locking import sync_lock
+from .sources import load_source
+
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description='CSV → WooCommerce po SKU; domyślnie podgląd')
-    parser.add_argument('command',choices=('validate','sync'))
-    parser.add_argument('csv_file',type=Path)
-    parser.add_argument('--apply',action='store_true')
-    parser.add_argument('--credentials',type=Path,default=Path('.secrets/woocommerce.json'))
-    parser.add_argument('--log',type=Path)
-    args=parser.parse_args(argv)
-    if args.command=='validate' and args.apply: parser.error('--apply tylko dla sync')
-    log=args.log or Path('logs')/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'.jsonl')
+    parser = argparse.ArgumentParser(
+        description=(
+            "Źródło produktów → WooCommerce po SKU; "
+            "domyślnie wykonywany jest tylko plan zmian"
+        )
+    )
+
+    parser.add_argument(
+        "command",
+        choices=("validate", "sync"),
+    )
+
+    parser.add_argument(
+        "source_file",
+        type=Path,
+        help="Plik CSV albo JSON z produktami",
+    )
+
+    parser.add_argument(
+        "--source-type",
+        choices=("auto", "csv", "json"),
+        default="auto",
+        help="Typ źródła; auto rozpoznaje format po rozszerzeniu",
+    )
+
+    parser.add_argument(
+        "--media",
+        type=Path,
+        help=(
+            "Manifest mediów dla JSON. "
+            "Domyślnie media.local.json obok katalogu."
+        ),
+    )
+
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "--credentials",
+        type=Path,
+        default=Path(".secrets/woocommerce.json"),
+    )
+
+    parser.add_argument(
+        "--log",
+        type=Path,
+    )
+
+    args = parser.parse_args(argv)
+
+    if args.command == "validate" and args.apply:
+        parser.error("--apply tylko dla sync")
+
+    log = (
+        args.log
+        or Path("logs")
+        / (
+            datetime.now(timezone.utc)
+            .strftime("%Y%m%dT%H%M%S%fZ")
+            + ".jsonl"
+        )
+    )
+
     try:
-        rows=load_csv(args.csv_file)
-        if args.command=='validate':
-            log.parent.mkdir(parents=True,exist_ok=True)
-            with log.open('x',encoding='utf-8') as f: f.write(json.dumps(dict(event='VALIDATION',valid=True,rows=len(rows)))+'\n')
-            print(f'CSV poprawny: {len(rows)} produktów')
+        rows = load_source(
+            args.source_file,
+            source_type=args.source_type,
+            media_path=args.media,
+        )
+
+        if args.command == "validate":
+            log.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            with log.open(
+                "x",
+                encoding="utf-8",
+            ) as stream:
+                stream.write(
+                    json.dumps(
+                        {
+                            "event": "VALIDATION",
+                            "valid": True,
+                            "rows": len(rows),
+                            "source": str(args.source_file),
+                            "source_type": args.source_type,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+            print(
+                f"Źródło poprawne: {len(rows)} produktów"
+            )
             return 0
-        creds=json.loads(args.credentials.read_text(encoding='utf-8-sig')) if args.credentials.exists() else {}
-        api=WooClient(*[os.getenv(k) or creds.get(k,'') for k in ('WC_URL','WC_CONSUMER_KEY','WC_CONSUMER_SECRET')])
+
+        creds = (
+            json.loads(
+                args.credentials.read_text(
+                    encoding="utf-8-sig"
+                )
+            )
+            if args.credentials.exists()
+            else {}
+        )
+
+        api = WooClient(
+            *[
+                os.getenv(key)
+                or creds.get(key, "")
+                for key in (
+                    "WC_URL",
+                    "WC_CONSUMER_KEY",
+                    "WC_CONSUMER_SECRET",
+                )
+            ]
+        )
+
         with sync_lock():
-            counts=sync(rows,api,args.apply,log)
-        print(json.dumps(dict(mode='APPLIED' if args.apply else 'PLAN',counts=counts,requests=api.stats,log=str(log))))
-        return 1 if counts['ERROR'] else 0
-    except (ValidationError,OSError,ValueError) as exc:
-        message=str(exc) if isinstance(exc,ValidationError) else 'Nie można odczytać wejścia/konfiguracji lub zapisać nowego raportu'
+            counts = sync(
+                rows,
+                api,
+                args.apply,
+                log,
+            )
+
+        print(
+            json.dumps(
+                {
+                    "mode": (
+                        "APPLIED"
+                        if args.apply
+                        else "PLAN"
+                    ),
+                    "counts": counts,
+                    "requests": api.stats,
+                    "source": str(args.source_file),
+                    "log": str(log),
+                },
+                ensure_ascii=False,
+            )
+        )
+
+        return 1 if counts["ERROR"] else 0
+
+    except (
+        ValidationError,
+        OSError,
+        ValueError,
+    ) as exc:
+        message = (
+            str(exc)
+            if isinstance(exc, ValidationError)
+            else (
+                "Nie można odczytać wejścia/konfiguracji "
+                "lub zapisać nowego raportu"
+            )
+        )
+
         if not log.exists():
-            log.parent.mkdir(parents=True,exist_ok=True)
-            with log.open('x',encoding='utf-8') as f: f.write(json.dumps(dict(action='ERROR',phase='VALIDATION',error=message,writes=0),ensure_ascii=False)+'\n')
-        print('Błąd: '+message,file=sys.stderr)
+            log.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            with log.open(
+                "x",
+                encoding="utf-8",
+            ) as stream:
+                stream.write(
+                    json.dumps(
+                        {
+                            "action": "ERROR",
+                            "phase": "VALIDATION",
+                            "error": message,
+                            "writes": 0,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+        print(
+            "Błąd: " + message,
+            file=sys.stderr,
+        )
         return 2

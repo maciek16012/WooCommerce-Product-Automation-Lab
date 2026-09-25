@@ -10,12 +10,16 @@ from .core import ValidationError, load_csv, load_records
 
 def load_json_catalog(
     path,
-    media_path=Path("data/media.local.json"),
+    media_path=None,
 ):
     """Load canonical catalog JSON and resolve local asset names to image IDs."""
 
     path = Path(path)
-    media_path = Path(media_path)
+    media_path = (
+        Path(media_path)
+        if media_path is not None
+        else path.with_name("media.local.json")
+    )
 
     try:
         catalog = json.loads(
@@ -82,7 +86,7 @@ def load_json_catalog(
 def load_source(
     path,
     source_type="auto",
-    media_path=Path("data/media.local.json"),
+    media_path=None,
 ):
     """Dispatch an input file to the appropriate source adapter."""
 
