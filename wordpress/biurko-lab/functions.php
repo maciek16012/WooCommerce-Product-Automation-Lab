@@ -17,3 +17,16 @@ function lab_category_nav(){echo '<nav class="category-nav" aria-label="Kategori
 add_action('woocommerce_before_shop_loop','lab_category_nav',5);
 add_filter('woocommerce_order_button_text',fn()=> 'Złóż zamówienie testowe');
 add_filter('woocommerce_get_privacy_policy_text',fn($text)=> 'Demonstracja lokalna. Wpisz wyłącznie fikcyjne dane. Zamówienie nie wymaga płatności i nie będzie wysłane.');
+
+// LAB: hide paid shipping when free shipping is available
+add_filter('woocommerce_package_rates', function($rates) {
+    $free_rates = [];
+
+    foreach ($rates as $rate_id => $rate) {
+        if ($rate->method_id === 'free_shipping') {
+            $free_rates[$rate_id] = $rate;
+        }
+    }
+
+    return !empty($free_rates) ? $free_rates : $rates;
+}, 100);
