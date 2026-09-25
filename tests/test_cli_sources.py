@@ -137,6 +137,50 @@ class CliSourceTests(unittest.TestCase):
 
         self.assertTrue(record["valid"])
         self.assertEqual(record["rows"], 1)
+    def test_validation_report_contains_run_metadata(self):
+        catalog = self.write_valid_catalog()
+        log = self.root / "metadata.jsonl"
+
+        result = main(
+            [
+                "validate",
+                str(catalog),
+                "--source-type",
+                "json",
+                "--log",
+                str(log),
+            ]
+        )
+
+        self.assertEqual(result, 0)
+
+        record = json.loads(
+            log.read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            record["event"],
+            "VALIDATION",
+        )
+
+        self.assertTrue(
+            record["run_id"]
+        )
+
+        self.assertEqual(
+            record["source"],
+            str(catalog),
+        )
+
+        self.assertEqual(
+            record["source_type"],
+            "json",
+        )
+
+        self.assertGreaterEqual(
+            record["duration_ms"],
+            0,
+        )
     def test_explicit_source_type_json(self):
         catalog = self.write_valid_catalog()
         log = self.root / "explicit.jsonl"

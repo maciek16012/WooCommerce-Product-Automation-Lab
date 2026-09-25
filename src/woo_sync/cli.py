@@ -1,9 +1,11 @@
-"""Source validation precedes credentials/network; --apply explicitly enables writes."""
+"""Multi-source product synchronization CLI with run-level reporting."""
 
 import argparse
 import json
 import os
 import sys
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -79,6 +81,15 @@ def main(argv=None):
     if args.command == "validate" and args.apply:
         parser.error("--apply tylko dla sync")
 
+    run_id = uuid.uuid4().hex
+    started = time.perf_counter()
+
+    def elapsed_ms():
+        return round(
+            (time.perf_counter() - started) * 1000,
+            3,
+        )
+
     log = (
         args.log
         or Path("logs")
@@ -97,6 +108,8 @@ def main(argv=None):
         )
 
         if args.command == "validate":
+            duration = elapsed_ms()
+
             log.parent.mkdir(
                 parents=True,
                 exist_ok=True,
@@ -110,10 +123,12 @@ def main(argv=None):
                     json.dumps(
                         {
                             "event": "VALIDATION",
+                            "run_id": run_id,
                             "valid": True,
                             "rows": len(rows),
                             "source": str(args.source_file),
                             "source_type": args.source_type,
+                            "duration_ms": duration,
                         },
                         ensure_ascii=False,
                     )
@@ -123,6 +138,7 @@ def main(argv=None):
             print(
                 f"Źródło poprawne: {len(rows)} produktów"
             )
+
             return 0
 
         creds = (
@@ -156,18 +172,46 @@ def main(argv=None):
                 stock_authority=args.stock_authority,
             )
 
+        duration = elapsed_ms()
+
+        run_summary = {
+            "event": "RUN_SUMMARY",
+            "run_id": run_id,
+            "source": str(args.source_file),
+            "source_type": args.source_type,
+            "mode": (
+                "APPLIED"
+                if args.apply
+                else "PLAN"
+            ),
+            "stock_authority": args.stock_authority,
+            "duration_ms": duration,
+            "counts": counts,
+            "requests": api.stats,
+        }
+
+        with log.open(
+            "a",
+            encoding="utf-8",
+        ) as stream:
+            stream.write(
+                json.dumps(
+                    run_summary,
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
         print(
             json.dumps(
                 {
-                    "mode": (
-                        "APPLIED"
-                        if args.apply
-                        else "PLAN"
-                    ),
+                    "run_id": run_id,
+                    "mode": run_summary["mode"],
                     "counts": counts,
                     "stock_authority": args.stock_authority,
                     "requests": api.stats,
                     "source": str(args.source_file),
+                    "duration_ms": duration,
                     "log": str(log),
                 },
                 ensure_ascii=False,
@@ -205,6 +249,10 @@ def main(argv=None):
                         {
                             "action": "ERROR",
                             "phase": "VALIDATION",
+                            "run_id": run_id,
+                            "source": str(args.source_file),
+                            "source_type": args.source_type,
+                            "duration_ms": elapsed_ms(),
                             "error": message,
                             "writes": 0,
                         },
@@ -217,4 +265,5 @@ def main(argv=None):
             "Błąd: " + message,
             file=sys.stderr,
         )
+
         return 2
