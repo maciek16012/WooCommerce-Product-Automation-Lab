@@ -1,0 +1,56 @@
+{
+    "materialization":  {
+                            "approved_changes_applied":  1,
+                            "products":  6
+                        },
+    "approved_change":  {
+                            "protected_fields_not_changed":  [
+                                                                 "name",
+                                                                 "regular_price",
+                                                                 "stock_quantity",
+                                                                 "status"
+                                                             ],
+                            "changed_fields":  [
+                                                   "description",
+                                                   "short_description"
+                                               ],
+                            "sku":  "BL-KEY-01"
+                        },
+    "verified":  true,
+    "woocommerce_plan":  {
+                             "stock_authority":  "woocommerce",
+                             "counts":  {
+                                            "SKIP":  5,
+                                            "ERROR":  0,
+                                            "CREATE":  0,
+                                            "UPDATE":  1
+                                        },
+                             "mode":  "PLAN",
+                             "requests":  {
+                                              "GET":  7,
+                                              "PUT":  0,
+                                              "POST":  0
+                                          }
+                         },
+    "regression":  {
+                       "result":  "OK",
+                       "tests":  45
+                   },
+    "scenario":  "human_in_the_loop_ai_content_workflow",
+    "proposal":  {
+                     "approved_sku":  "BL-KEY-01",
+                     "approved":  1,
+                     "pending":  5,
+                     "products":  6
+                 },
+    "safeguards_verified":  [
+                                "AI proposal starts as pending",
+                                "Human approval is required before materialization",
+                                "Rejected or pending content is not applied",
+                                "Source fingerprint prevents stale proposals from being applied",
+                                "AI-generated content cannot directly change price or stock",
+                                "Generated artifact is validated by the existing product pipeline",
+                                "WooCommerce synchronization remained PLAN-only",
+                                "No WooCommerce write requests were performed"
+                            ]
+}
