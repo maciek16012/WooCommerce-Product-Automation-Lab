@@ -9,12 +9,11 @@ from .ai_providers import PROVIDER_NAMES, get_provider
 from .content_proposals import (
     apply_approved,
     build_proposal,
-    set_approval,
 )
 from .core import ValidationError
 from .proposal_io import (
     load_proposal,
-    replace_proposal,
+    review_proposal,
     write_materialized_csv,
     write_new_proposal,
 )
@@ -101,6 +100,8 @@ def main(argv=None):
 
     try:
         if args.command == "propose":
+            if args.out.exists():
+                raise ValidationError("Proposal już istnieje; nie zostanie nadpisany")
             rows = load_source(
                 args.source_file,
                 source_type=args.source_type,
@@ -135,26 +136,8 @@ def main(argv=None):
             return 0
 
         if args.command in ("approve", "reject"):
-            proposal = load_proposal(
-                args.proposal_file
-            )
-
-            decision = (
-                "approved"
-                if args.command == "approve"
-                else "rejected"
-            )
-
-            proposal = set_approval(
-                proposal,
-                args.sku,
-                decision,
-            )
-
-            replace_proposal(
-                args.proposal_file,
-                proposal,
-            )
+            decision = "approved" if args.command == "approve" else "rejected"
+            review_proposal(args.proposal_file, args.sku, decision)
 
             print(
                 json.dumps(
