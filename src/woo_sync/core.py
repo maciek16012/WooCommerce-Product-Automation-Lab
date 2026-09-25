@@ -39,45 +39,217 @@ class ProductRow:
                     manage_stock=True,stock_quantity=self.stock_quantity,status=self.status,
                     **{k:v for k,v in self.extra.items() if k in ('description','short_description')})
 
-def load_csv(path):
-    problems, rows, seen = [], [], set()
-    try:
-        with Path(path).open(encoding='utf-8-sig',newline='') as stream:
-            reader=csv.DictReader(stream,strict=True)
-            names=reader.fieldnames or []
-            if not set(FIELDS).issubset(names) or set(names)-set(FIELDS+OPTIONAL) or len(names)!=len(set(names)):
-                raise ValidationError('Nieprawidłowe lub powtórzone nagłówki CSV')
-            for data in reader:
-                line=reader.line_num
-                try:
-                    if None in data or any(v is None for v in data.values()): raise ValidationError('liczba kolumn')
-                    data={k:v.strip() for k,v in data.items()}
-                    sku=data['sku']
-                    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}',sku): raise ValidationError('SKU: litery ASCII, cyfry, . _ -, maks. 80')
-                    if sku.casefold() in seen: raise ValidationError('powtórzone SKU (także różna wielkość liter)')
-                    seen.add(sku.casefold())
-                    if not data['name'] or len(data['name'])>200: raise ValidationError('nazwa wymagana, maks. 200 znaków')
-                    if not re.fullmatch(r'\d{1,8}(\.\d{1,2})?',data['regular_price']): raise ValidationError('cena nieujemna, maks. 2 miejsca po kropce')
-                    if not re.fullmatch(r'\d{1,7}',data['stock_quantity']): raise ValidationError('stan: liczba całkowita 0–9999999')
-                    if data['status'] not in {'draft','publish','pending','private'}: raise ValidationError('nieznany status')
-                    extra={k:data[k] for k in OPTIONAL if k in data}
-                    for field in ('description','short_description'):
-                        if len(extra.get(field,''))>30000 or '<' in extra.get(field,'') or '>' in extra.get(field,''): raise ValidationError('opisy: zwykły tekst bez HTML, maks. 30000')
-                    if 'categories' in extra:
-                        cats=[c.strip() for c in extra['categories'].split('|')]
-                        if not all(re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',c) for c in cats) or len(cats)!=len(set(cats)): raise ValidationError('kategorie: unikalne slugi rozdzielone |')
-                        extra['categories']=cats
-                    if extra.get('image_id') and not re.fullmatch(r'[1-9]\d*',extra['image_id']): raise ValidationError('image_id: dodatnia liczba całkowita')
-                    if extra.get('image_id') and extra.get('image_url'): raise ValidationError('wybierz image_id albo image_url')
-                    if extra.get('image_url'): safe_url(extra['image_url'])
-                    if (extra.get('image_id') or extra.get('image_url')) and not extra.get('image_alt'): raise ValidationError('obraz wymaga ALT')
-                    if len(extra.get('image_alt',''))>500: raise ValidationError('ALT: maks. 500 znaków')
-                    rows.append(ProductRow(line,sku,data['name'],f"{Decimal(data['regular_price']):.2f}",int(data['stock_quantity']),data['status'],extra))
-                except ValidationError as exc: problems.append(f'Wiersz {line}: {exc}')
-    except (UnicodeError,csv.Error) as exc: raise ValidationError('Nieprawidłowy CSV UTF-8') from exc
-    if problems: raise ValidationError('\n'.join(problems))
-    if not rows: raise ValidationError('CSV nie zawiera produktów')
+def load_records(records, fieldnames=None):
+    """Validate normalized mapping records and return ProductRow objects."""
+    records = list(records)
+
+    if fieldnames is None:
+        names = []
+        for _, data in records:
+            if not isinstance(data, dict):
+                raise ValidationError('Rekord produktu musi być obiektem')
+            for key in data:
+                if key not in names:
+                    names.append(key)
+    else:
+        names = list(fieldnames)
+
+    if (
+        not set(FIELDS).issubset(names)
+        or set(names) - set(FIELDS + OPTIONAL)
+        or len(names) != len(set(names))
+    ):
+        raise ValidationError('Nieprawidłowe lub powtórzone nagłówki danych')
+
+    problems = []
+    rows = []
+    seen = set()
+
+    for line, raw in records:
+        try:
+            if not isinstance(raw, dict):
+                raise ValidationError('rekord produktu musi być obiektem')
+
+            if None in raw:
+                raise ValidationError('liczba kolumn')
+
+            if any(key not in raw for key in FIELDS):
+                raise ValidationError('brak wymaganych pól')
+
+            original_keys = set(raw)
+
+            data = {
+                key: (
+                    ''
+                    if raw.get(key) is None
+                    else str(raw.get(key)).strip()
+                )
+                for key in names
+            }
+
+            sku = data['sku']
+
+            if not re.fullmatch(
+                r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}',
+                sku,
+            ):
+                raise ValidationError(
+                    'SKU: litery ASCII, cyfry, . _ -, maks. 80'
+                )
+
+            if sku.casefold() in seen:
+                raise ValidationError(
+                    'powtórzone SKU (także różna wielkość liter)'
+                )
+
+            seen.add(sku.casefold())
+
+            if not data['name'] or len(data['name']) > 200:
+                raise ValidationError(
+                    'nazwa wymagana, maks. 200 znaków'
+                )
+
+            if not re.fullmatch(
+                r'\d{1,8}(\.\d{1,2})?',
+                data['regular_price'],
+            ):
+                raise ValidationError(
+                    'cena nieujemna, maks. 2 miejsca po kropce'
+                )
+
+            if not re.fullmatch(
+                r'\d{1,7}',
+                data['stock_quantity'],
+            ):
+                raise ValidationError(
+                    'stan: liczba całkowita 0–9999999'
+                )
+
+            if data['status'] not in {
+                'draft',
+                'publish',
+                'pending',
+                'private',
+            }:
+                raise ValidationError('nieznany status')
+
+            extra = {
+                key: data[key]
+                for key in OPTIONAL
+                if key in original_keys
+            }
+
+            for field in ('description', 'short_description'):
+                value = extra.get(field, '')
+                if (
+                    len(value) > 30000
+                    or '<' in value
+                    or '>' in value
+                ):
+                    raise ValidationError(
+                        'opisy: zwykły tekst bez HTML, maks. 30000'
+                    )
+
+            if 'categories' in extra:
+                cats = [
+                    category.strip()
+                    for category
+                    in extra['categories'].split('|')
+                ]
+
+                if (
+                    not all(
+                        re.fullmatch(
+                            r'[a-z0-9]+(?:-[a-z0-9]+)*',
+                            category,
+                        )
+                        for category in cats
+                    )
+                    or len(cats) != len(set(cats))
+                ):
+                    raise ValidationError(
+                        'kategorie: unikalne slugi rozdzielone |'
+                    )
+
+                extra['categories'] = cats
+
+            if (
+                extra.get('image_id')
+                and not re.fullmatch(
+                    r'[1-9]\d*',
+                    extra['image_id'],
+                )
+            ):
+                raise ValidationError(
+                    'image_id: dodatnia liczba całkowita'
+                )
+
+            if (
+                extra.get('image_id')
+                and extra.get('image_url')
+            ):
+                raise ValidationError(
+                    'wybierz image_id albo image_url'
+                )
+
+            if extra.get('image_url'):
+                safe_url(extra['image_url'])
+
+            if (
+                extra.get('image_id')
+                or extra.get('image_url')
+            ) and not extra.get('image_alt'):
+                raise ValidationError('obraz wymaga ALT')
+
+            if len(extra.get('image_alt', '')) > 500:
+                raise ValidationError(
+                    'ALT: maks. 500 znaków'
+                )
+
+            rows.append(
+                ProductRow(
+                    line,
+                    sku,
+                    data['name'],
+                    f"{Decimal(data['regular_price']):.2f}",
+                    int(data['stock_quantity']),
+                    data['status'],
+                    extra,
+                )
+            )
+
+        except ValidationError as exc:
+            problems.append(f'Wiersz {line}: {exc}')
+
+    if problems:
+        raise ValidationError('\n'.join(problems))
+
+    if not rows:
+        raise ValidationError('Źródło nie zawiera produktów')
+
     return rows
+
+
+def load_csv(path):
+    """Load UTF-8 CSV and validate it through the shared record pipeline."""
+    try:
+        with Path(path).open(
+            encoding='utf-8-sig',
+            newline='',
+        ) as stream:
+            reader = csv.DictReader(stream, strict=True)
+            names = reader.fieldnames or []
+            records = [
+                (reader.line_num, data)
+                for data in reader
+            ]
+
+    except (UnicodeError, csv.Error) as exc:
+        raise ValidationError(
+            'Nieprawidłowy CSV UTF-8'
+        ) from exc
+
+    return load_records(records, names)
 
 def oauth_header(method,url,key,secret,timestamp=None,nonce=None):
     quote=lambda s:urlparse.quote(str(s),safe='~')
@@ -176,7 +348,26 @@ def diff_payload(desired,current):
 
 def changes(row,current): return diff_payload(row.payload(),current)
 
-def sync(rows,api,apply,log_path):
+def apply_stock_authority(desired,current,stock_authority):
+    """Apply ownership policy for stock_quantity.
+
+    source:
+        The external source owns stock and may update existing products.
+
+    woocommerce:
+        WooCommerce owns stock for existing products. The source still
+        provides the initial stock when a product is created.
+    """
+    if stock_authority not in ('source','woocommerce'):
+        raise ValidationError('Nieznana polityka stocku')
+
+    if current and stock_authority == 'woocommerce':
+        desired=dict(desired)
+        desired.pop('stock_quantity',None)
+
+    return desired
+
+def sync(rows,api,apply,log_path,stock_authority='source'):
     counts=dict(CREATE=0,UPDATE=0,SKIP=0,ERROR=0)
     log_path.parent.mkdir(parents=True,exist_ok=True)
     with log_path.open('x',encoding='utf-8') as out:
@@ -190,6 +381,11 @@ def sync(rows,api,apply,log_path):
             for row in rows:
                 current=api.find(row.sku)
                 desired=desired_payload(row,current,cats)
+                desired=apply_stock_authority(
+                    desired,
+                    current,
+                    stock_authority,
+                )
                 payload=diff_payload(desired,current) if current else desired
                 action=('UPDATE' if payload else 'SKIP') if current else 'CREATE'
                 plan.append((row,current,payload,action))

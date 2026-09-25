@@ -21,9 +21,16 @@ class SyncTests(unittest.TestCase):
     def write(self,rows,header=None):
         with self.csv.open('w',encoding='utf-8',newline='') as f:
             w=csv.writer(f);w.writerow(header or ['sku','name','regular_price','stock_quantity','status']);w.writerows(rows)
-    def run_sync(self,api,apply=True):
+    def run_sync(self,api,apply=True,stock_authority='source'):
         self.serial+=1
-        with patch('sys.stdout',new_callable=io.StringIO): return sync(load_csv(self.csv),api,apply,self.root/f'{self.serial}.jsonl')
+        with patch('sys.stdout',new_callable=io.StringIO):
+            return sync(
+                load_csv(self.csv),
+                api,
+                apply,
+                self.root/f'{self.serial}.jsonl',
+                stock_authority=stock_authority,
+            )
     def test_create_skip_update_plan(self):
         api=FakeApi();self.assertEqual(self.run_sync(api,False)['CREATE'],1);self.assertEqual(api.writes,[])
         self.assertEqual(self.run_sync(api)['CREATE'],1);self.assertEqual(self.run_sync(api)['SKIP'],1);self.assertEqual(len(api.writes),1)
@@ -72,6 +79,40 @@ class SyncTests(unittest.TestCase):
     def test_missing_optional_columns_preserve_fields(self):
         row=load_csv(self.csv)[0];current={**row.payload(),'description':'Keep','images':[{'id':20,'alt':'Keep'}],'categories':[{'id':3}]}
         self.assertEqual(changes(row,current),{})
+    def test_woocommerce_stock_authority_preserves_existing_stock(self):
+        api=FakeApi()
+        row=load_csv(self.csv)[0]
+        api.products['A-1']={
+            **row.payload(),
+            'id':7,
+            'stock_quantity':3,
+        }
+
+        counts=self.run_sync(
+            api,
+            stock_authority='woocommerce',
+        )
+
+        self.assertEqual(counts['SKIP'],1)
+        self.assertEqual(api.writes,[])
+        self.assertEqual(
+            api.products['A-1']['stock_quantity'],
+            3,
+        )
+
+    def test_woocommerce_stock_authority_sets_stock_on_create(self):
+        api=FakeApi()
+
+        counts=self.run_sync(
+            api,
+            stock_authority='woocommerce',
+        )
+
+        self.assertEqual(counts['CREATE'],1)
+        self.assertEqual(
+            api.writes[0][1]['stock_quantity'],
+            12,
+        )
     def test_http_restricted_to_loopback(self):
         for url in ['http://example.com','http://192.168.1.2','https://user:pass@example.com','https://example.com/?secret=1']:
             with self.assertRaises(ValidationError):WooClient(url,'key','secret')
