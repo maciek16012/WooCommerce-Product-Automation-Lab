@@ -35,19 +35,27 @@ def load_json_catalog(
             "Katalog JSON musi być tablicą produktów"
         )
 
-    try:
-        media = json.loads(
-            media_path.read_text(encoding="utf-8-sig")
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValidationError(
-            "Nie można odczytać manifestu mediów"
-        ) from exc
+    uses_assets = any(
+        isinstance(product, dict) and product.get("asset")
+        for product in catalog
+    )
 
-    if not isinstance(media, dict):
-        raise ValidationError(
-            "Manifest mediów musi być obiektem JSON"
-        )
+    media = {}
+
+    if uses_assets:
+        try:
+            media = json.loads(
+                media_path.read_text(encoding="utf-8-sig")
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValidationError(
+                "Nie można odczytać manifestu mediów"
+            ) from exc
+
+        if not isinstance(media, dict):
+            raise ValidationError(
+                "Manifest mediów musi być obiektem JSON"
+            )
 
     records = []
 
