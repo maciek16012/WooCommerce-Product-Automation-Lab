@@ -85,11 +85,8 @@ woo-sync validate tmp/reviewed.csv
 woo-sync sync tmp/reviewed.csv --stock-authority woocommerce
 ```
 
-Only approved entries change; other catalog rows keep their source content. Use a new output filename for each proposal/materialization. `apply-proposal` **does not write to WooCommerce**.
-
-For real local inference, select `--provider llamacpp`; configure `LLAMACPP_BASE_URL` (default `http://127.0.0.1:8080`) and `LLAMACPP_MODEL` (default local alias `jarvis-qwen35-9b`). Bring your own compatible model/server: neither is shipped here. The verified alias actually loaded **Qwen3VL-8B-Instruct-Q4_K_M**, with text-only requests. Local transport rejects non-loopback endpoints, redirects and system proxies.
-
-OpenAI is optional: `--provider openai`, `OPENAI_API_KEY`, optionally `OPENAI_MODEL`. It sends selected product data to an external service and may incur charges; its provider tests use mocks. [Workflow and limitations](docs/stage3-ai-content.md).
+Only approved entries change; other catalog rows keep their source content. Use a new output filename for each proposal/materialization. apply-proposal does not write to WooCommerce.
+For real local inference, select --provider llamacpp; configure LLAMACPP_BASE_URL (default http://127.0.0.1:8080) and LLAMACPP_MODEL (default local alias jarvis-qwen35-9b). The verified local setup used this custom model alias through a llama.cpp-compatible server with text-only requests. Bring your own compatible model and server; neither is shipped with the repository. Local transport rejects non-loopback endpoints, redirects and system proxies.
 
 ## Tests
 
