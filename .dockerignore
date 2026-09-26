@@ -1,0 +1,11 @@
+# Allowlist: credentials and local artifacts never enter the build context.
+**
+!Dockerfile.ai-review
+!src/
+!src/woo_sync/
+!src/woo_sync/*.py
+!scripts/
+!scripts/ai-review-server.py
+**/__pycache__/
+**/*.pyc
+**/*.pyo

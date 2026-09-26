@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "woo-product-automation-lab"
-version = "0.1.0"
+version = "1.3.0"
 description = "Validated multi-source WooCommerce synchronization and reviewed AI content"
 readme = "README.md"
 requires-python = ">=3.10"

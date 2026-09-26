@@ -18,10 +18,25 @@ def local_host(host):
     try: return ipaddress.ip_address(host).is_loopback
     except ValueError: return False
 
-def safe_url(value):
-    p = urlparse.urlsplit(value)
-    if (not p.hostname or p.username or p.password or p.query or p.fragment or p.scheme not in ('http','https')
-        or (p.scheme=='http' and not local_host(p.hostname))):
+def validate_sku(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', value):
+        raise ValidationError('SKU: litery ASCII, cyfry, . _ -, maks. 80')
+    return value
+
+def safe_url(value, *, allowed_http_hosts=()):
+    if not isinstance(value, str) or any(ord(c) <= 32 or ord(c) == 127 for c in value):
+        raise ValidationError('URL: niedozwolone znaki')
+    if isinstance(allowed_http_hosts, str) or any(
+            not isinstance(host, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', host)
+            for host in allowed_http_hosts):
+        raise ValidationError('HTTP allowlist requires explicit internal Docker hostnames')
+    try:
+        p = urlparse.urlsplit(value)
+        if p.port == 0: raise ValueError
+    except ValueError:
+        raise ValidationError('URL: nieprawidłowy adres lub port') from None
+    if (not p.hostname or p.username is not None or p.password is not None or '?' in value or '#' in value or p.scheme not in ('http','https')
+        or (p.scheme=='http' and not local_host(p.hostname) and p.hostname not in allowed_http_hosts)):
         raise ValidationError('URL: HTTPS wymagane poza loopback; bez loginu, query i fragmentu')
     return p
 
@@ -89,13 +104,7 @@ def load_records(records, fieldnames=None):
 
             sku = data['sku']
 
-            if not re.fullmatch(
-                r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}',
-                sku,
-            ):
-                raise ValidationError(
-                    'SKU: litery ASCII, cyfry, . _ -, maks. 80'
-                )
+            validate_sku(sku)
 
             if sku.casefold() in seen:
                 raise ValidationError(
@@ -265,22 +274,39 @@ def oauth_header(method,url,key,secret,timestamp=None,nonce=None):
 class WooClient:
     class _NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self,req,fp,code,msg,headers,newurl): return None
-    def __init__(self,url,key,secret,timeout=20):
-        self.parsed=safe_url(url)
+    def __init__(self,url,key,secret,timeout=20,*,allowed_http_hosts=(),transport_url=None):
+        transport_url = transport_url or url
+        self.parsed=safe_url(
+            url,
+            allowed_http_hosts=allowed_http_hosts if transport_url == url else (),
+        )
+        self.transport_parsed=safe_url(
+            transport_url,
+            allowed_http_hosts=allowed_http_hosts,
+        )
+        if transport_url != url and (
+            self.parsed.scheme != 'http'
+            or self.transport_parsed.scheme != 'http'
+        ):
+            raise ValidationError(
+                'Transport override dozwolony wyłącznie dla wewnętrznego HTTP'
+            )
         if not key or not secret: raise ValidationError('Brak lokalnych kluczy API')
         self.base=url.rstrip('/')+'/wp-json/wc/v3/'
+        self.transport_base=transport_url.rstrip('/')+'/wp-json/wc/v3/'
         self.key,self.secret,self.timeout=key,secret,timeout
         self.stats=dict(GET=0,POST=0,PUT=0)
     def request(self,method,path,payload=None):
         url=self.base+path
+        transport_url=self.transport_base+path
         data=json.dumps(payload,ensure_ascii=False).encode() if payload is not None else None
         attempts=3 if method=='GET' else 1
         for attempt in range(attempts):
             auth=(oauth_header(method,url,self.key,self.secret) if self.parsed.scheme=='http' else 'Basic '+base64.b64encode(f'{self.key}:{self.secret}'.encode()).decode())
-            req=urllib.request.Request(url,data=data,method=method,headers={'Authorization':auth,'Accept':'application/json','Content-Type':'application/json','User-Agent':'WooCommerceProductAutomationLab/1.0'})
+            req=urllib.request.Request(transport_url,data=data,method=method,headers={'Authorization':auth,'Accept':'application/json','Content-Type':'application/json','User-Agent':'WooCommerceProductAutomationLab/1.0'})
             self.stats[method]=self.stats.get(method,0)+1
             try:
-                with urllib.request.build_opener(self._NoRedirect).open(req,timeout=self.timeout) as response: return json.load(response)
+                with urllib.request.build_opener(urllib.request.ProxyHandler({}), self._NoRedirect).open(req,timeout=self.timeout) as response: return json.load(response)
             except urllib.error.HTTPError as exc:
                 if method=='GET' and exc.code in (429,502,503,504) and attempt+1<attempts:
                     time.sleep(2**attempt); continue
@@ -367,7 +393,7 @@ def apply_stock_authority(desired,current,stock_authority):
 
     return desired
 
-def sync(rows,api,apply,log_path,stock_authority='source'):
+def sync(rows,api,apply,log_path,stock_authority='source',*,quiet=False):
     counts=dict(CREATE=0,UPDATE=0,SKIP=0,ERROR=0)
     log_path.parent.mkdir(parents=True,exist_ok=True)
     with log_path.open('x',encoding='utf-8') as out:
@@ -392,7 +418,7 @@ def sync(rows,api,apply,log_path,stock_authority='source'):
         except ApiError as exc:
             emit(dict(action='ERROR',phase='PREFLIGHT',error=str(exc),writes=0))
             counts['ERROR']+=1
-            print(f'ERROR PREFLIGHT: {exc}')
+            if not quiet: print(f'ERROR PREFLIGHT: {exc}')
             return counts
         for row,current,payload,action in plan:
             record=dict(line=row.line,sku=row.sku,action=action,mode='APPLIED' if apply else 'PLAN',product_id=current['id'] if current else None,
@@ -405,6 +431,6 @@ def sync(rows,api,apply,log_path,stock_authority='source'):
                 record.update(action='ERROR',error=str(exc) if isinstance(exc,ApiError) else 'Nieprawidłowa odpowiedź zapisu')
             counts[record['action']]+=1
             emit(record)
-            print(f"{record['action']:6} {row.sku} "+json.dumps(record['changes'],ensure_ascii=False))
+            if not quiet: print(f"{record['action']:6} {row.sku} "+json.dumps(record['changes'],ensure_ascii=False))
         emit(dict(event='SUMMARY',counts=counts,requests=getattr(api,'stats',{})))
     return counts
