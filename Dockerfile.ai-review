@@ -1,0 +1,9 @@
+FROM python:3.13-slim
+ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1
+WORKDIR /app
+RUN groupadd --gid 10001 lab && useradd --uid 10001 --gid lab --no-create-home lab \
+    && mkdir -p /app/state && chown lab:lab /app/state
+COPY src/ /app/src/
+COPY scripts/ai-review-server.py /app/scripts/ai-review-server.py
+USER lab
+CMD ["python", "scripts/ai-review-server.py"]

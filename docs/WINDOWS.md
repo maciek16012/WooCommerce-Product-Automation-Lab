@@ -65,3 +65,23 @@ Start with the [offline demo workflow](../README.md#ai-workflow). Optional local
 The [Stage 3 guide](stage3-ai-content.md) preserves the embedded-Python commands used during the original local acceptance test. They are historical alternatives, not installation dependencies. [llama.cpp security review](llamacpp-security-review.md) records the shared host's actual configuration; do not copy its broad port binding into a new setup.
 
 `scripts/verify-live.py` and `scripts/verify-api-failure.py` are stateful acceptance helpers from Stage 1. They write to the configured store and assume particular initial data; they are not general health checks or offline tests.
+
+
+## Stage 4 — wp-admin AI Content Review
+
+For an existing store with `.secrets/woocommerce.json`, run from the repository root:
+
+```powershell
+py -3 scripts/init-review-token.py
+docker compose config --quiet
+docker compose build ai-review
+docker compose up -d
+.\scripts\deploy-local.ps1
+docker compose exec -T wordpress php -l /var/www/html/wp-content/mu-plugins/ai-content-review.php
+```
+
+The token helper cryptographically generates 32 random bytes, saves only to ignored `.env`, preserves an existing token and never displays it. WordPress and Python receive the same token server-side. Do not print full Compose configuration or secret files. A new Python service has no published host port; its credential file is mounted read-only. Existing database/WordPress volumes remain intact.
+
+Open `http://localhost:8090/wp-admin/admin.php?page=lab-ai-review`, or WooCommerce → **AI Content Review**. Use an account with `manage_woocommerce`. Select a product, choose **Local llama.cpp**, generate a proposal, review it explicitly, and preview **WooCommerce PLAN** before any write. APPLY is a separate action and replans against the current source and store state. In the recorded local acceptance run, the final repeat PLAN reported CREATE 0 / UPDATE 0 / SKIP 6 / ERROR 0.
+
+Your own compatible llama.cpp server must be running. Compose uses `host.docker.internal:8080` through the explicit Docker-host opt-in; `LLAMACPP_MODEL` is a configurable local alias, not an official model name. No OpenAI call is needed. Full configuration, verified E2E results, error recovery, security boundaries and limitations: [Stage 4 guide](stage4-wp-admin-ai-review.md).

@@ -1,4 +1,4 @@
-﻿services:
+services:
   db:
     image: mariadb:11.4
     environment:
@@ -22,6 +22,8 @@
     ports:
       - "127.0.0.1:8090:80"
     environment:
+      AI_REVIEW_TOKEN: ${AI_REVIEW_TOKEN:-}
+      AI_REVIEW_SERVICE_URL: http://ai-review:8081
       WORDPRESS_DB_HOST: db:3306
       WORDPRESS_DB_USER: wordpress
       WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
@@ -29,6 +31,47 @@
     volumes:
       - wordpress_data:/var/www/html
 
+  ai-review:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai-review
+    depends_on:
+      - wordpress
+    environment:
+      AI_REVIEW_TOKEN: ${AI_REVIEW_TOKEN:-}
+      AI_REVIEW_SOURCE: /app/data/catalog.json
+      AI_REVIEW_MEDIA: /app/data/media.local.json
+      AI_REVIEW_CREDENTIALS: /run/secrets/woocommerce.json
+      AI_REVIEW_WC_URL: http://localhost:8090
+      AI_REVIEW_WC_TRANSPORT_URL: http://wordpress
+      AI_REVIEW_STOCK_AUTHORITY: woocommerce
+      LLAMACPP_BASE_URL: http://host.docker.internal:8080
+      LLAMACPP_ALLOW_DOCKER_HOST: "1"
+      LLAMACPP_MODEL: ${LLAMACPP_MODEL:-jarvis-qwen35-9b}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/app/data:ro
+      - type: bind
+        source: ./.secrets/woocommerce.json
+        target: /run/secrets/woocommerce.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - ai_review_data:/app/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   db_data:
   wordpress_data:
+  ai_review_data:

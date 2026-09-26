@@ -9,7 +9,7 @@ import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
 
-from .core import ProductRow, ValidationError
+from .core import ProductRow, ValidationError, validate_sku
 
 SCHEMA_VERSION = 1
 CONTENT_FIELDS = ("description", "short_description", "image_alt")
@@ -121,8 +121,7 @@ def validate_proposal(proposal):
 
         sku = item.get("sku")
 
-        if not isinstance(sku, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", sku):
-            raise ValidationError("Proposal: brak SKU")
+        validate_sku(sku)
 
         folded = sku.casefold()
 

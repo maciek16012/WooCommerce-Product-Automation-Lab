@@ -12,7 +12,7 @@ The project demonstrates how catalog updates can preserve store-owned inventory,
 - **SKU matching**, CREATE / UPDATE / SKIP, changed-field-only updates and an idempotent second run.
 - **PLAN by default**, explicit `--apply`, source-owned or WooCommerce-owned stock, JSONL operation and run reports.
 - **Human-in-the-loop AI** with offline `demo`, local `llama.cpp` and optional OpenAI Responses providers; pending proposals, content-bound approval and stale-source protection.
-- **89 offline regression tests**; recorded real WooCommerce, checkout, Sheets and local-model acceptance results.
+- **141 offline regression tests**; recorded real WooCommerce, checkout, Sheets and local-model acceptance results.
 
 ## Architecture
 
@@ -88,6 +88,23 @@ woo-sync sync tmp/reviewed.csv --stock-authority woocommerce
 Only approved entries change; other catalog rows keep their source content. Use a new output filename for each proposal/materialization. apply-proposal does not write to WooCommerce.
 For real local inference, select --provider llamacpp; configure LLAMACPP_BASE_URL (default http://127.0.0.1:8080) and LLAMACPP_MODEL (default local alias jarvis-qwen35-9b). The verified local setup used this custom model alias through a llama.cpp-compatible server with text-only requests. Bring your own compatible model and server; neither is shipped with the repository. Local transport rejects non-loopback endpoints, redirects and system proxies.
 
+## WordPress AI Content Review UI — Stage 4
+
+Manage product content from **WooCommerce → AI Content Review**. The MU-plugin is a GUI and server-side proxy; existing Python Stage 3 modules remain the source of proposal, review and synchronization rules.
+
+```mermaid
+flowchart LR
+    B[Browser] --> W[WordPress Admin: capability and nonce checks]
+    W --> S[Internal AI Review service: token authentication]
+    S --> P[Stage 3 proposal and review workflow]
+    P --> PLAN[Full-source WooCommerce PLAN]
+    PLAN --> APPLY[Separate explicit APPLY: revalidate and replan]
+```
+
+The review API has no host port. Secrets stay server-side. Docker-only transport exceptions are explicit: Woo HTTP allowlists only `wordpress`; `LLAMACPP_ALLOW_DOCKER_HOST=1` adds only `host.docker.internal`, without changing default CLI trust. No model is bundled or inferred from its alias.
+
+**Stage 4 is verified end-to-end locally.** A real local llama.cpp proposal was generated in wp-admin, manually reviewed and approved, previewed through WooCommerce PLAN, applied with an explicit write, and followed by a second PLAN confirming idempotence. The verified sequence was Generate → Review → PLAN → APPLY → repeat PLAN. See [Stage 4 setup, verification and limitations](docs/stage4-wp-admin-ai-review.md) and [Windows startup](docs/WINDOWS.md#stage-4--wp-admin-ai-content-review).
+
 ## Tests
 
 ```powershell
@@ -95,7 +112,7 @@ python scripts/run-tests.py
 git diff --check
 ```
 
-The runner discovers the full suite and blocks socket networking. All **89 tests** run without WooCommerce, llama.cpp, OpenAI or credentials. [GitHub Actions](.github/workflows/tests.yml) runs the same suite on push and pull requests, using Python 3.10 and 3.13 on Ubuntu and Windows. Installing Python/build tools may require network access; the regression suite does not.
+The runner discovers the full suite and blocks socket networking. All **141 tests** run without WooCommerce, llama.cpp, OpenAI or credentials. [GitHub Actions](.github/workflows/tests.yml) runs the same suite on push and pull requests, using Python 3.10 and 3.13 on Ubuntu and Windows. Installing Python/build tools may require network access; the regression suite does not.
 
 Live acceptance scripts in `scripts/verify-*.py` are separate, stateful historical scenarios that can write to a configured store. They are not part of CI and should not be run against unrelated data.
 
@@ -107,8 +124,9 @@ Live acceptance scripts in `scripts/verify-*.py` are separate, stateful historic
 | Guest checkout, offline payment | 179.00 + 12.90 = 191.90 PLN; no payment or email delivery | [Checkout](docs/checkout-test-results.json) |
 | Public Sheets → WooCommerce PLAN | CREATE 0 / UPDATE 0 / SKIP 6 / ERROR 0; GET 7 / POST 0 / PUT 0 | [Sheets results](docs/google-sheets-integration-results.json) |
 | Real local llama.cpp → reviewed CSV → PLAN | CREATE 0 / UPDATE 1 / SKIP 5 / ERROR 0; GET 7 / POST 0 / PUT 0 | [Local AI results](docs/stage3-local-ai-results.json) |
+| Stage 4 wp-admin AI review → PLAN → APPLY → repeat PLAN | PLAN: CREATE 0 / UPDATE 1 / SKIP 5 / ERROR 0; APPLY: UPDATE 1 / PUT 1; repeat PLAN: CREATE 0 / UPDATE 0 / SKIP 6 / ERROR 0 | [Stage 4 verification](docs/stage4-wp-admin-ai-review.md) |
 
-The local AI test planned two description changes and confirmed unchanged store data. Review was performed by Codex under the owner's delegated acceptance-test instruction, **not an independent human sign-off**. Recorded older test counts describe earlier stages; the final regression baseline is 89. These are functional acceptance results, not throughput benchmarks.
+The local AI test planned two description changes and confirmed unchanged store data. Review was performed by Codex under the owner's delegated acceptance-test instruction, **not an independent human sign-off**. Recorded older test counts describe earlier stages; the Stage 3 regression baseline was 89; Stage 4 currently has 141 offline tests. These are functional acceptance results, not throughput benchmarks.
 
 ## Project stages
 
@@ -116,15 +134,16 @@ The local AI test planned two description changes and confirmed unchanged store 
 2. **v1.1.0 — Data pipeline:** canonical JSON, adapters, stock ownership and run reporting.
 3. **v1.2.0 — Reviewed AI content:** provider abstraction, local structured output, review integrity and materialization.
 
-Portfolio/CI changes follow v1.2.0 without moving the tag. Python package metadata retains its separate initial `0.1.0` version; Git tags identify project milestones.
+4. **v1.3.0 — WordPress AI Content Review UI (verified locally end-to-end):** internal Python service and wp-admin Generate → Review → PLAN → explicit APPLY, followed by a repeat PLAN confirming no remaining changes. Package version is `1.3.0`; the release tag is created only during the publication step.
 
 ## Documentation
 
 - [Windows setup](docs/WINDOWS.md) and [demo data / artwork](data/README.md)
 - [Architecture](docs/architecture.md) and [Stage 2 pipeline](docs/stage2-data-pipeline.md)
+- [Stage 4 admin UI](docs/stage4-wp-admin-ai-review.md)
 - [Stage 3 workflow](docs/stage3-ai-content.md) and [historical demo-provider results](docs/stage3-ai-workflow-results.json)
 - [llama.cpp security review](docs/llamacpp-security-review.md)
-- [Portfolio case study](docs/portfolio-case-study.md) and [public-release audit](docs/public-release-audit.md)
+- [Portfolio case study](docs/portfolio-case-study.md)
 
 ## Limitations
 

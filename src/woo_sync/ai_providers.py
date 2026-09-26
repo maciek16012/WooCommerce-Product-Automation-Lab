@@ -222,12 +222,15 @@ def openai_provider(row):
 
 def _llamacpp_endpoint():
     base = os.getenv("LLAMACPP_BASE_URL", "http://127.0.0.1:8080")
+    allowed_hosts = {"127.0.0.1", "localhost", "::1"}
+    if os.getenv("LLAMACPP_ALLOW_DOCKER_HOST") == "1":
+        allowed_hosts.add("host.docker.internal")
     try:
         parsed = urllib.parse.urlsplit(base)
         port = parsed.port
         if (any(ord(c) <= 32 or ord(c) == 127 for c in base)
                 or parsed.scheme not in ("http", "https")
-                or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+                or parsed.hostname not in allowed_hosts
                 or parsed.username is not None or parsed.password is not None
                 or parsed.path not in ("", "/") or "?" in base or "#" in base
                 or port == 0):
@@ -239,6 +242,7 @@ def _llamacpp_endpoint():
         ) from None
     # Pin localhost to numeric loopback: no dependency on DNS/hosts-file routing.
     host = "[::1]" if parsed.hostname == "::1" else "127.0.0.1"
+    if parsed.hostname == "host.docker.internal": host = "host.docker.internal"
     authority = host + (f":{port}" if port is not None else "")
     return f"{parsed.scheme}://{authority}/v1/chat/completions"
 
@@ -320,7 +324,7 @@ def llamacpp_provider(row):
         method="POST",
     )
 
-    # Ignore environment/system proxies: product data must remain on loopback.
+    # Ignore environment/system proxies, including explicitly enabled Docker transport.
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), _NoRedirectHandler()
     )

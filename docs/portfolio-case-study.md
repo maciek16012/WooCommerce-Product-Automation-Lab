@@ -24,15 +24,15 @@ These controls do not provide multi-product rollback or defend against a malicio
 
 ## AI integration
 
-Providers include deterministic offline demo, optional OpenAI Responses and local llama.cpp structured output. AI may propose only descriptions and image ALT, never price, stock, SKU or status. The local acceptance test used a model alias backed by Qwen3VL-8B-Instruct-Q4_K_M. Requests were text-only, so ALT remained grounded in the existing textual source.
+Providers include deterministic offline demo, optional OpenAI Responses and local llama.cpp structured output. AI may propose only description, short description and image ALT, never price, stock, SKU or status. The verified local setup used the configurable alias `jarvis-qwen35-9b` through a llama.cpp-compatible server. The repository does not ship a model or infer a checkpoint from that alias.
 
 Schema checks reject malformed output, not unsupported factual claims. Review remains necessary. In the recorded acceptance test, Codex performed review under the owner's delegated instruction; this is not evidence of independent human approval.
 
 ## Testing
 
-The final functional baseline has **89 offline regression tests** covering source validation, diff planning, stock ownership, authentication/transport behavior, provider failures, review integrity and atomic materialization. The runner blocks real socket networking. CI is configured for Windows/Ubuntu and Python 3.10/3.13; hosted results will exist only after a future authorized publication.
+The current functional baseline has **141 offline regression tests** covering source validation, diff planning, stock ownership, authentication/transport behavior, provider failures, review integrity and atomic materialization. The runner blocks real socket networking. CI is configured for Windows/Ubuntu and Python 3.10/3.13; hosted results will exist only after a future authorized publication.
 
-Separate historical live tests exercised WooCommerce, guest checkout, public Sheets and the local model. No live services or credentials are required by CI. [Release verification](public-release-audit.md).
+Separate historical live tests exercised WooCommerce, guest checkout, public Sheets and the local model. No live services or credentials are required by CI. [Recorded local AI verification](stage3-local-ai-results.json).
 
 ## Verified E2E results
 
